@@ -12,8 +12,6 @@
     font-family: "JetBrains Sans", Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
     font-weight: 300;
     color: rgba(255, 255, 255, 0.87);
-    background-color: #000000;
-    text-align: center;
 }
 
 body {
@@ -38,10 +36,6 @@ h1 {
 
 .title {
     margin-bottom: 40px;
-}
-
-#app {
-    max-width: 1280px;
 }
 
 .logo {
