@@ -10,9 +10,10 @@ const routes = [
         component: SettingsView
     },
     {
-        path: '/task-detail',
+        path: '/task-detail/:taskId',
         name: 'TaskDetail',
-        component: TaskDetailView
+        component: TaskDetailView,
+        props: true
     },
 ];
 
