@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import SettingsView from '../view/SettingsView.vue';
+import TaskDetailView from '../view/TaskDetailView.vue';
 
 // 1. 定义路由规则
 const routes = [
@@ -7,6 +8,11 @@ const routes = [
         path: '/',
         name: 'Settings',
         component: SettingsView
+    },
+    {
+        path: '/task-detail',
+        name: 'TaskDetail',
+        component: TaskDetailView
     },
 ];
 
