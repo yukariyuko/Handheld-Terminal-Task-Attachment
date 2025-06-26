@@ -63,6 +63,13 @@
 </template>
 
 <script setup>
+<<<<<<< HEAD
+=======
+import { ref, onMounted } from 'vue';
+// 引入封装好的 API 请求
+import { getConfig, updateConfig } from '../api/settings.js';
+import InitView from '../view/InitView.vue';
+>>>>>>> c87b67e (initView框架差不多完成 仍需添加跳转和变量同步等任务)
 
 import { onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
@@ -75,7 +82,7 @@ const { fetchConfig,updateConfig } = configStore;
 
 const CameraName = ["","前方主视角","左侧视角","右侧视角","后方视角"];
 
-// 用于“取消”操作时恢复数据的备份
+// 用于"取消"操作时恢复数据的备份
 let originalConfigData = null;
 
 onMounted(async () => {
@@ -93,8 +100,10 @@ async function onSubmit() {
     const response = await updateConfig(configData.value);
     if (response.data && response.data.code === 200) {
       alert('设置已保存成功！');
-      // 更新备份数据，以便下次“取消”操作是基于最新的已保存状态
+      // 更新备份数据，以便下次"取消"操作是基于最新的已保存状态
       originalConfigData = JSON.parse(JSON.stringify(configData.value));
+
+      emit('close', true); 
     } else {
       alert(`保存失败: ${response.data.msg}`);
     }
@@ -112,8 +121,16 @@ function onCancel() {
       // 恢复到初始加载的数据
       configData.value = JSON.parse(JSON.stringify(originalConfigData));
     }
+    emit('close', false);
   }
 }
+
+// 【新增】导入 defineEmits
+import { defineEmits } from 'vue';
+
+// 【新增】定义组件可以发出的事件
+const emit = defineEmits(['close']);
+
 </script>
 
 <style scoped>
