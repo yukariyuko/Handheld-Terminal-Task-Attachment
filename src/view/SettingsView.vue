@@ -63,13 +63,12 @@
 </template>
 
 <script setup>
-<<<<<<< HEAD
-=======
+
 import { ref, onMounted } from 'vue';
 // 引入封装好的 API 请求
 import { getConfig, updateConfig } from '../api/settings.js';
 import InitView from '../view/InitView.vue';
->>>>>>> c87b67e (initView框架差不多完成 仍需添加跳转和变量同步等任务)
+
 
 import { onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
