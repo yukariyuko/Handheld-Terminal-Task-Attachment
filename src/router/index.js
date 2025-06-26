@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import SettingsView from '../view/SettingsView.vue';
+import TaskDetailView from '../view/TaskDetailView.vue';
 
 // 1. 定义路由规则
 const routes = [
@@ -8,6 +9,18 @@ const routes = [
         name: 'Settings',
         component: SettingsView
     },
+    {
+        path: '/task-detail/:taskId',
+        name: 'TaskDetail',
+        component: TaskDetailView,
+        props: true
+    },
+  {
+    path: '/:pathMatch(.*)*', // 404 页面
+    name: 'NotFound',
+    component: () => import('../view/NotFound.vue'),
+    meta: { hidden: true }
+  }
 ];
 
 // 2. 创建路由实例
