@@ -41,17 +41,18 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import { ElMessage } from 'element-plus';
+import { checkFs, checkDb, checkAgv, checkCam } from '../api/system.js';
 
 // 1. 获取 Vue Router 实例
 const router = useRouter();
 
 // 2. 定义所有检查项的状态
 const checkItems = ref([
-  { id: 'fs', label: '检查系统文件完整性', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请重新安装本系统。', expanded: false, api: () => axios.get('/system/check/fs') },
-  { id: 'db', label: '检测数据库系统连接', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查数据库连接设置是否正确。', expanded: false, api: () => axios.get('/system/check/db') },
-  { id: 'agv', label: '与车辆控制系统通信', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查巡检车IP与端口配置是否正确。', expanded: false, api: () => axios.get('/system/check/agv') },
-  { id: 'cam', label: '检测摄像头通道状态', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查摄像头IP及账号密码是否正确。', expanded: false, api: () => axios.get('/system/check/cam') }
+  { id: 'fs', label: '检查系统文件完整性', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请重新安装本系统。', expanded: false, api: checkFs },
+  { id: 'db', label: '检测数据库系统连接', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查数据库连接设置是否正确。', expanded: false, api: checkDb },
+  { id: 'agv', label: '与车辆控制系统通信', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查巡检车IP与端口配置是否正确。', expanded: false, api: checkAgv },
+  { id: 'cam', label: '检测摄像头通道状态', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查摄像头IP及账号密码是否正确。', expanded: false, api: checkCam }
 ]);
 
 // 3. 计算属性：判断是否所有检查都成功了
@@ -105,9 +106,8 @@ const goToSettings = () => {
 // 8. 按钮事件：进入系统（主页面）
 const enterSystem = () => {
   if (allChecksSuccessful.value) {
-    alert('检查通过，正在进入系统主页...');
-    
-    // router.push('/dashboard'); 
+    ElMessage.success('检查通过，正在进入系统主页...');
+    router.push('/task-list'); 
   }
 };
 
