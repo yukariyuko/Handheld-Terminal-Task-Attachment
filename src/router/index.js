@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import SettingsView from '../view/SettingsView.vue';
 import TaskDetailView from '../view/TaskDetailView.vue';
+import TaskExecuteView from '../view/TaskExecuteView.vue';
+import TaskListView from '../view/TaskListView.vue';
 import InitView from '../view/InitView.vue';
 
 
@@ -17,10 +19,21 @@ const routes = [
         component: SettingsView
     },
     {
-        path: '/task-detail/:taskId',
+        path: '/task-detail/:id',
         name: 'TaskDetail',
         component: TaskDetailView,
         props: true
+    },
+    {
+        path: '/task-execute/:id',
+        name: 'TaskExecute',
+        component: TaskExecuteView,
+        props: true
+    },
+    {
+        path: '/task-list',
+        name: 'TaskList',
+        component: TaskListView
     },
   {
     path: '/:pathMatch(.*)*', // 404 页面

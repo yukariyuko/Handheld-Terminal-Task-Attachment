@@ -64,20 +64,14 @@
 
 <script setup>
 
-import { ref, onMounted } from 'vue';
-// 引入封装好的 API 请求
-import { getConfig, updateConfig } from '../api/settings.js';
-import InitView from '../view/InitView.vue';
-
-
-import { onMounted } from 'vue';
+import { ref, onMounted, defineEmits } from 'vue';
 import { storeToRefs } from 'pinia';
-import {useConfigStore} from "../api/config.js";
+import { useConfigStore } from "../api/config.js";
 
 //公共config
 const configStore = useConfigStore();
-const { configData} = storeToRefs(configStore);
-const { fetchConfig,updateConfig } = configStore;
+const { configData } = storeToRefs(configStore);
+const { fetchConfig, updateConfig } = configStore;
 
 const CameraName = ["","前方主视角","左侧视角","右侧视角","后方视角"];
 
@@ -123,9 +117,6 @@ function onCancel() {
     emit('close', false);
   }
 }
-
-// 【新增】导入 defineEmits
-import { defineEmits } from 'vue';
 
 // 【新增】定义组件可以发出的事件
 const emit = defineEmits(['close']);
