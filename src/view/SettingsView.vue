@@ -36,7 +36,7 @@
       <div class="form-section">
         <div class="section-title camera">摄像头设置</div>
         <div v-for="i in 4" :key="i" class="camera-group">
-          <div class="camera-title">摄像头{{ i }}</div>
+          <div class="camera-title">摄像头--{{CameraName[i]}}</div>
           <div class="form-item">
             <label class="form-label">摄像头{{ i }}地址</label>
             <input type="text" class="form-input" v-model="configData['cam' + i]" placeholder="请输入摄像头地址">
@@ -63,50 +63,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-// 引入封装好的 API 请求
-import { getConfig, updateConfig } from '../api/settings.js';
 
-// 定义响应式状态，其结构对应 AgvConfig 实体
-const configData = ref({
-  id: null,
-  host: '',
-  drivePort: null,
-  analysisPort: null,
-  cloudUrl: '',
-  cam1: '',
-  username1: '',
-  password1: '',
-  cam2: '',
-  username2: '',
-  password2: '',
-  cam3: '',
-  username3: '',
-  password3: '',
-  cam4: '',
-  username4: '',
-  password4: '',
-});
+import { onMounted } from 'vue';
+import { storeToRefs } from 'pinia';
+import {useConfigStore} from "../api/config.js";
+
+//公共config
+const configStore = useConfigStore();
+const { configData} = storeToRefs(configStore);
+const { fetchConfig,updateConfig } = configStore;
+
+const CameraName = ["","前方主视角","左侧视角","右侧视角","后方视角"];
 
 // 用于“取消”操作时恢复数据的备份
 let originalConfigData = null;
 
-// 在组件挂载后获取初始配置
 onMounted(async () => {
-  try {
-    const response = await getConfig();
-    // 假设业务成功码为200，这通常在统一的响应拦截器中处理
-    if (response.data && response.data.code === 200) {
-      configData.value = response.data.data;
-      // 深拷贝一份原始数据，用于取消操作
-      originalConfigData = JSON.parse(JSON.stringify(response.data.data));
-    } else {
-      alert(`获取配置失败: ${response.data.msg}`);
-    }
-  } catch (error) {
-    console.error("获取配置时发生错误:", error);
-    alert('无法连接到服务器，请检查网络或联系管理员。');
-  }
+  await fetchConfig();
 });
 
 // 保存设置按钮的点击事件处理
