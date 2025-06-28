@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteMockServe } from 'vite-plugin-mock';
 
-export default {
+export default defineConfig({
   plugins: [
     vue(),
     viteMockServe({
@@ -20,5 +20,9 @@ export default {
         rewrite: path => path.replace(/^\/api/, ''),
       }
     }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
   }
-};
+});
