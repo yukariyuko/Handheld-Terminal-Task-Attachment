@@ -78,6 +78,9 @@ const allChecksSuccessful = computed(() => {
   return checkItems.value.length > 0 && checkItems.value.every(item => item.status === 'success');
 });
 
+// 添加重试计数器
+const retryCount = ref(0);
+const maxRetries = 1;
 
 const runCheck = async (item) => {
   item.status = 'loading';
@@ -86,7 +89,6 @@ const runCheck = async (item) => {
 
   try {
     let apiPromise;
-    const params = configData.value;
 
     // 变化3：将直接的 axios 调用替换为导入的 API 函数调用
     switch (item.id) {
@@ -94,19 +96,24 @@ const runCheck = async (item) => {
         apiPromise = checkFs();
         break;
       case 'db':
-        apiPromise = checkDb(params);
+        apiPromise = checkDb();
         break;
       case 'agv':
-        apiPromise = checkAgv(params);
+        apiPromise = checkAgv();
         break;
       case 'cam':
-        apiPromise = checkCam(params);
+        apiPromise = checkCam();
         break;
       default:
         throw new Error('未知的检查项');
     }
 
-    const response = await apiPromise;
+    // 添加超时处理
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('请求超时')), 10000);
+    });
+
+    const response = await Promise.race([apiPromise, timeoutPromise]);
     
     // 这里的判断逻辑需要根据您的真实API返回格式来定
     // 假设我们之前讨论的 AjaxResult 格式 { code, msg } 是正确的
@@ -118,6 +125,7 @@ const runCheck = async (item) => {
     }
 
   } catch (error) {
+    console.error(`检查项 ${item.id} 失败:`, error);
     item.status = 'error';
     // error.response?.data?.msg 是 axios 错误对象中常见的后端消息路径
     item.message = `<strong>错误详情：</strong>` + (error.response?.data?.msg || error.message || '发生未知网络或服务器错误');
@@ -130,6 +138,8 @@ const performAllChecks = async () => {
 };
 
 const recheckAll = () => {
+  // 重置重试计数器
+  retryCount.value = 0;
   performAllChecks();
 };
 
@@ -149,28 +159,47 @@ const toggleExpand = (item) => {
   }
 };
 
+// 自动重试函数
+const autoRetry = () => {
+  setTimeout(() => {
+    // 检查是否还有项目处于loading状态
+    const hasLoadingItems = checkItems.value.some(item => item.status === 'loading');
+    if (hasLoadingItems && retryCount.value < maxRetries) {
+      retryCount.value++;
+      console.log(`第${retryCount.value}次自动重试检查...`);
+      performAllChecks();
+      
+      // 如果还有重试机会，继续设置下一次重试
+      if (retryCount.value < maxRetries) {
+        autoRetry();
+      } else {
+        console.log('已达到最大重试次数，停止自动重试');
+        // 将剩余的loading项标记为错误
+        checkItems.value.forEach(item => {
+          if (item.status === 'loading') {
+            item.status = 'error';
+            item.message = '<strong>错误详情：</strong>检查超时，请手动点击"重新检测"按钮。';
+          }
+        });
+      }
+    }
+  }, 1000);
+};
+
 onMounted(async () => {
   console.log('InitView 组件已挂载，开始执行初始化检查...');
   
+  // 直接执行检查，不等待配置加载
+  console.log('开始执行所有系统检查...');
   try {
-    console.log('正在加载全局配置...');
-    // 优先加载全局配置
-    await configStore.fetchConfig();
-    console.log('全局配置加载成功:', configData.value);
-    
-    console.log('开始执行所有系统检查...');
-    // 配置加载成功后，再执行所有检查
     await performAllChecks();
     console.log('所有系统检查完成');
-
   } catch (error) {
-    console.error("加载初始配置失败:", error);
-    // 如果配置加载失败，可以将所有检查项都标记为错误
-    checkItems.value.forEach(item => {
-        item.status = 'error';
-        item.message = `<strong>错误详情：</strong>无法加载系统基础配置，请检查网络或联系管理员。`;
-    });
+    console.error("执行系统检查失败:", error);
   }
+
+  // 启动自动重试机制
+  autoRetry();
 });
 
 onActivated(async () => {

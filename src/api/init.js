@@ -8,16 +8,16 @@ export function checkFs() {
 }
 
 //检查数据库连接
-export function checkDb(config) {
-  return axios.get(`${baseUrl}/db`, { params: config });
+export function checkDb() {
+  return axios.get(`${baseUrl}/db`);
 }
 
 //检查 AGV 连接
-export function checkAgv(config) {
-  return axios.get(`${baseUrl}/agv`, { params: config });
+export function checkAgv() {
+  return axios.get(`${baseUrl}/agv`);
 }
 
 //检查摄像头连接
-export function checkCam(config) {
-  return axios.get(`${baseUrl}/cam`, { params: config });
+export function checkCam() {
+  return axios.get(`${baseUrl}/cam`);
 }

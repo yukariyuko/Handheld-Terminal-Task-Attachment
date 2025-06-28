@@ -48,12 +48,11 @@ export default [
 {
     url: '/api/system/check/agv',
     method: 'get',
-    response: ({ query }) => {
-    const host = query.host || '未知主机';
+    response: () => {
     if (systemStatus.agv.success) {
-        return { code: 200, msg: `成功：与车辆 (${host}) 通信正常`, data: null };
+        return { code: 200, msg: systemStatus.agv.message, data: null };
     }
-    return { code: 500, msg: `错误：无法 Ping 通车辆主机 (${host})`, data: null };
+    return { code: 500, msg: '错误：无法 Ping 通车辆主机', data: null };
     },
 },
 
@@ -61,12 +60,11 @@ export default [
 {
     url: '/api/system/check/cam',
     method: 'get',
-    response: ({ query }) => {
-    const user = query.username1 || 'admin';
+    response: () => {
     if (systemStatus.cam.success) {
-        return { code: 200, msg: `成功：所有摄像头通道均在线`, data: null };
+        return { code: 200, msg: systemStatus.cam.message, data: null };
     }
-    return { code: 500, msg: `错误：摄像头认证失败，用户 (${user}) 凭据错误`, data: null };
+    return { code: 500, msg: '错误：摄像头认证失败', data: null };
     },
 },
 ];
