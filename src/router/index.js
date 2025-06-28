@@ -4,6 +4,7 @@ import TaskDetailView from '../view/TaskDetailView.vue';
 import TaskExecuteView from '../view/TaskExecuteView.vue';
 import TaskListView from '../view/TaskListView.vue';
 import InitView from '../view/InitView.vue';
+import TaskManagementView from '../TaskManagementView.vue';
 
 // 1. 定义路由规则
 const routes = [
@@ -39,6 +40,11 @@ const routes = [
     name: 'NotFound',
     component: () => import('../view/NotFound.vue'),
     meta: { hidden: true }
+  },
+  {
+    path: '/task-management',
+    name: 'TaskManagement',
+    component: TaskManagementView
   }
 ];
 
