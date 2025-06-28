@@ -1,11 +1,12 @@
-<!--TODO: 返回按钮导航，面包屑导航清晰显示页面层级关系 -->
 <template>
   <div class="layout">
     <el-container class="fullscreen">
       <el-header class="breadcrumb-bar">
-        <div class="breadcrumb-text">
-          地铁隧道巡检系统 / 任务列表 / 任务详情
-        </div>
+        <el-breadcrumb separator="/" class="breadcrumb-text">
+          <el-breadcrumb-item :to="{ path: '/' }">地铁隧道巡检系统</el-breadcrumb-item>
+          <el-breadcrumb-item :to="{ path: '/task-list' }">任务列表</el-breadcrumb-item>
+          <el-breadcrumb-item>任务详情</el-breadcrumb-item>
+        </el-breadcrumb>
         <el-button type="primary" :icon="ArrowLeft" @click="goBack"
           >返回</el-button
         >
@@ -272,7 +273,7 @@ const goBack = () => {
 };
 
 onMounted(async () => {
-  const taskId = route.params['taskId'];
+  const taskId = route.params['id'];
   if (!taskId) {
     ElMessage.error('任务ID不存在');
     return;
@@ -543,5 +544,12 @@ onMounted(async () => {
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
+}
+.breadcrumb-text {
+  font-size: 14px;
+}
+.el-breadcrumb__inner {
+  color: #409eff;
+  cursor: pointer;
 }
 </style>
