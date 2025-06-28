@@ -3,10 +3,19 @@
 </script>
 
 <template>
-  <router-view />
+  <router-view :key="$route.fullPath" />
 </template>
 
 <style>
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -15,3 +24,4 @@ body {
   background-color: #f0f2f5;
 }
 </style>
+

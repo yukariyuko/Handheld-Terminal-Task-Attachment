@@ -16,8 +16,20 @@
             <span v-if="item.status === 'error'">✕</span>
           </div>
 
-          <span class="check-label">{{ item.label }}</span>
-
+          <span class="check-label">
+            <template v-if="item.id === 'db'">
+              检测数据库 ({{ configData.dbHost || '地址未配置' }})
+            </template>
+            <template v-else-if="item.id === 'agv'">
+              与车辆控制系统 ({{ configData.agvHost || '地址未配置' }}) 通信
+            </template>
+            <template v-else-if="item.id === 'cam'">
+              检测摄像头 ({{ configData.camHost || '地址未配置' }}) 通信
+            </template>
+            <template v-else>
+              {{ item.label }}
+            </template>
+          </span>
           <span v-if="item.status === 'success'" class="status-text status-success">成功</span>
           <span v-else-if="item.status === 'error'" class="status-text status-error">失败</span>
           <span v-else class="status-text status-loading">检查中...</span>
@@ -39,89 +51,143 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
+
+// InitView.vue -> <script setup>
+
+import { ref, onMounted, computed, onActivated, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
+import { useConfigStore } from '../api/config.js'; 
+import { storeToRefs } from 'pinia';   
+import { checkFs, checkDb, checkAgv, checkCam } from '../api/init.js';
 
-// 1. 获取 Vue Router 实例
 const router = useRouter();
+const route = useRoute();
+const configStore = useConfigStore();
+const { configData, needRefresh } = storeToRefs(configStore);
 
-// 2. 定义所有检查项的状态
+
 const checkItems = ref([
-  { id: 'fs', label: '检查系统文件完整性', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请重新安装本系统。', expanded: false, api: () => axios.get('/system/check/fs') },
-  { id: 'db', label: '检测数据库系统连接', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查数据库连接设置是否正确。', expanded: false, api: () => axios.get('/system/check/db') },
-  { id: 'agv', label: '与车辆控制系统通信', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查巡检车IP与端口配置是否正确。', expanded: false, api: () => axios.get('/system/check/agv') },
-  { id: 'cam', label: '检测摄像头通道状态', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请检查摄像头IP及账号密码是否正确。', expanded: false, api: () => axios.get('/system/check/cam') }
+  { id: 'fs', label: '检查系统文件完整性', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请重新安装本系统。', expanded: false },
+  { id: 'db', label: '检测数据库系统连接', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请在设置页面检查数据库连接信息是否正确。', expanded: false },
+  { id: 'agv', label: '与车辆控制系统通信', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请在设置页面检查巡检车IP与端口配置是否正确。', expanded: false },
+  { id: 'cam', label: '检测摄像头通道状态', status: 'loading', message: '', solution: '<strong>解决方案：</strong>请在设置页面检查摄像头IP及账号密码是否正确。', expanded: false }
 ]);
 
-// 3. 计算属性：判断是否所有检查都成功了
 const allChecksSuccessful = computed(() => {
   return checkItems.value.length > 0 && checkItems.value.every(item => item.status === 'success');
 });
 
-// 4. 核心逻辑：执行单个检查
+
 const runCheck = async (item) => {
-  // 重置状态
   item.status = 'loading';
   item.message = '';
   item.expanded = false; 
 
   try {
-    // 调用真实的API接口
-    const response = await item.api();
+    let apiPromise;
+    const params = configData.value;
+
+    // 变化3：将直接的 axios 调用替换为导入的 API 函数调用
+    switch (item.id) {
+      case 'fs':
+        apiPromise = checkFs();
+        break;
+      case 'db':
+        apiPromise = checkDb(params);
+        break;
+      case 'agv':
+        apiPromise = checkAgv(params);
+        break;
+      case 'cam':
+        apiPromise = checkCam(params);
+        break;
+      default:
+        throw new Error('未知的检查项');
+    }
+
+    const response = await apiPromise;
     
-    // 根据后端返回的数据结构判断成功或失败
-    if (response.data.success) {
+    // 这里的判断逻辑需要根据您的真实API返回格式来定
+    // 假设我们之前讨论的 AjaxResult 格式 { code, msg } 是正确的
+    if (response.code === 200) {
       item.status = 'success';
-      item.message = response.data.message || '检查通过';
+      item.message = response.msg || '检查通过';
     } else {
-      throw new Error(response.data.message || '检查失败');
+      throw new Error(response.msg || '检查失败');
     }
 
   } catch (error) {
-    // 捕获API调用失败或业务逻辑失败
     item.status = 'error';
-    item.message = error.response?.data?.message || error.message || '发生未知错误';
+    // error.response?.data?.msg 是 axios 错误对象中常见的后端消息路径
+    item.message = `<strong>错误详情：</strong>` + (error.response?.data?.msg || error.message || '发生未知网络或服务器错误');
   }
 };
 
-// 5. 核心逻辑：执行所有检查
 const performAllChecks = async () => {
-  // 使用 Promise.all 并发执行所有检查
   const checkPromises = checkItems.value.map(item => runCheck(item));
   await Promise.all(checkPromises);
 };
 
-// 6. 按钮事件：重新检测
 const recheckAll = () => {
   performAllChecks();
 };
 
-// 7. 按钮事件：跳转到设置页面
 const goToSettings = () => {
   router.push('/settings');
 };
 
-// 8. 按钮事件：进入系统（主页面）
 const enterSystem = () => {
   if (allChecksSuccessful.value) {
-    alert('检查通过，正在进入系统主页...');
-    
-    // router.push('/dashboard'); 
+    router.push('/dashboard'); 
   }
 };
 
-// 9. UI交互：展开/收起失败项的详情
 const toggleExpand = (item) => {
   if (item.status === 'error') {
     item.expanded = !item.expanded;
   }
 };
 
-// 10. 生命周期钩子：组件挂载后，自动开始执行所有检查
-onMounted(() => {
-  performAllChecks();
+onMounted(async () => {
+  console.log('InitView 组件已挂载，开始执行初始化检查...');
+  
+  try {
+    console.log('正在加载全局配置...');
+    // 优先加载全局配置
+    await configStore.fetchConfig();
+    console.log('全局配置加载成功:', configData.value);
+    
+    console.log('开始执行所有系统检查...');
+    // 配置加载成功后，再执行所有检查
+    await performAllChecks();
+    console.log('所有系统检查完成');
+
+  } catch (error) {
+    console.error("加载初始配置失败:", error);
+    // 如果配置加载失败，可以将所有检查项都标记为错误
+    checkItems.value.forEach(item => {
+        item.status = 'error';
+        item.message = `<strong>错误详情：</strong>无法加载系统基础配置，请检查网络或联系管理员。`;
+    });
+  }
 });
+
+onActivated(async () => {
+  // 当用户从其他页面返回 Init 页面时，重新执行系统检查
+  await performAllChecks();
+});
+
+// 监听 store 中的刷新状态，当需要刷新时重新执行检查
+watch(needRefresh, (newValue) => {
+  if (newValue) {
+    console.log('检测到刷新标记，重新执行系统检查...');
+    performAllChecks();
+    // 重置刷新状态
+    configStore.setNeedRefresh(false);
+  }
+});
+
 </script>
 
 <style scoped>
@@ -139,6 +205,7 @@ onMounted(() => {
   padding: 20px; /* 给小屏幕留出边距 */
   box-sizing: border-box; /* 确保padding不会影响尺寸计算 */
 }
+
 
 .init-container {
   /* 3. 响应式与阴影优化 */

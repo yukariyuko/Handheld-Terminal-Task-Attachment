@@ -1,10 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import SettingsView from '../view/SettingsView.vue';
-<<<<<<< HEAD
 import TaskDetailView from '../view/TaskDetailView.vue';
-=======
 import InitView from '../view/InitView.vue';
->>>>>>> c87b67e (initView框架差不多完成 仍需添加跳转和变量同步等任务)
 
 // 1. 定义路由规则
 const routes = [
