@@ -1,6 +1,6 @@
 // vite.config.js
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 import { viteMockServe } from 'vite-plugin-mock';
 
 export default defineConfig({
@@ -15,14 +15,27 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5173', // 开发接口转发地址
+        target: 'http://localhost:5173',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/api/, ''),
       }
     }
   },
   test: {
-    environment: 'jsdom',
     globals: true,
+    environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+
+      include: ['src/view/**/*.{js,vue}'],
+
+      exclude: [
+        'src/**/__tests__/**',
+        'src/main.js',
+        'src/router/**',
+        'mock/**',
+      ],
+    }
   }
 });
