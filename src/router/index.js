@@ -5,7 +5,6 @@ import TaskExecuteView from '../view/TaskExecuteView.vue';
 import TaskListView from '../view/TaskListView.vue';
 import InitView from '../view/InitView.vue';
 
-
 // 1. 定义路由规则
 const routes = [
     {

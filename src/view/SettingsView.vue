@@ -63,23 +63,32 @@
 </template>
 
 <script setup>
-
-import { ref, onMounted, defineEmits } from 'vue';
+import { ref, onMounted, watch } from 'vue';
+import { defineEmits } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useConfigStore } from "../api/config.js";
+import { useRouter } from 'vue-router';
 
-//公共config
+const router = useRouter(); 
+const emit = defineEmits(['close']);
+
 const configStore = useConfigStore();
-const { configData } = storeToRefs(configStore);
-const { fetchConfig, updateConfig } = configStore;
+const { configData} = storeToRefs(configStore);
+
 
 const CameraName = ["","前方主视角","左侧视角","右侧视角","后方视角"];
-
 // 用于"取消"操作时恢复数据的备份
-let originalConfigData = null;
+let originalConfigData = ref(null);
+
+// 当 fetchConfig 第一次成功获取数据后，备份它
+watch(configData, (newValue) => {
+  if (newValue && !originalConfigData.value) {
+    originalConfigData.value = JSON.parse(JSON.stringify(newValue));
+  }
+}, { immediate: true, deep: true });
 
 onMounted(async () => {
-  await fetchConfig();
+  await configStore.fetchConfig();
 });
 
 // 保存设置按钮的点击事件处理
@@ -90,13 +99,15 @@ async function onSubmit() {
 
   try {
     // 调用更新接口，传入当前表单数据
-    const response = await updateConfig(configData.value);
+    const response =  await configStore.updateConfig();
     if (response.data && response.data.code === 200) {
       alert('设置已保存成功！');
       // 更新备份数据，以便下次"取消"操作是基于最新的已保存状态
       originalConfigData = JSON.parse(JSON.stringify(configData.value));
 
       emit('close', true); 
+      configStore.setNeedRefresh(true); // 设置需要刷新状态
+      router.push('/?refresh=true'); // 跳转回主页并标记需要刷新
     } else {
       alert(`保存失败: ${response.data.msg}`);
     }
@@ -116,10 +127,13 @@ function onCancel() {
     }
     emit('close', false);
   }
+  configStore.setNeedRefresh(true); // 设置需要刷新状态
+  router.push('/'); // 跳转回主页
 }
 
-// 【新增】定义组件可以发出的事件
-const emit = defineEmits(['close']);
+
+
+
 
 </script>
 
