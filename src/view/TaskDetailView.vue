@@ -272,7 +272,7 @@ const goBack = () => {
 };
 
 onMounted(async () => {
-  const taskId = route.params['taskId'];
+  const taskId = route.params['id'];
   if (!taskId) {
     ElMessage.error('任务ID不存在');
     return;

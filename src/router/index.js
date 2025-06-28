@@ -34,12 +34,12 @@ const routes = [
         name: 'TaskList',
         component: TaskListView
     },
-  {
-    path: '/:pathMatch(.*)*', // 404 页面
-    name: 'NotFound',
-    component: () => import('../view/NotFound.vue'),
-    meta: { hidden: true }
-  }
+    {
+      path: '/:pathMatch(.*)*', // 404 页面
+      name: 'NotFound',
+      component: () => import('../view/NotFound.vue'),
+      meta: { hidden: true }
+    }
 ];
 
 // 2. 创建路由实例
