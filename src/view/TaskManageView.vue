@@ -249,7 +249,7 @@ import {
   startTask, 
   endTask, 
   uploadTask 
-} from '../api/settings.js'
+} from '../api/taskmanagee.js'
 
 // 搜索表单数据
 const searchForm = reactive({
