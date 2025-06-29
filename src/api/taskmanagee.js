@@ -1,5 +1,5 @@
+import axios from '../utils/request';
 // API 服务配置
-import axios from 'axios'
 
 const API_BASE_URL = 'http://192.168.2.57/prod-api';
 const WEBRTC_BASE_URL = 'http://192.168.2.57/webrtc-api';
@@ -262,6 +262,7 @@ export function getVideoStreamUrl(channel) {
 export function getAudioStreamUrl() {
     return `${WEBRTC_BASE_URL}/index/api/webrtc?app=live&stream=5&type=play`;
 }
+
 
 // ==================== 响应拦截器 ====================
 

@@ -4,7 +4,7 @@ import TaskDetailView from '../view/TaskDetailView.vue';
 import TaskExecuteView from '../view/TaskExecuteView.vue';
 import TaskListView from '../view/TaskListView.vue';
 import InitView from '../view/InitView.vue';
-import TaskManagementView from '../TaskManagementView.vue';
+import TaskManageView from '../view/TaskManageView.vue';
 
 // 1. 定义路由规则
 const routes = [
@@ -36,9 +36,9 @@ const routes = [
         component: TaskListView
     },
     {
-        path: '/task-management',
-        name: 'TaskManagement',
-        component: TaskManagementView
+        path: '/task-manage',
+        name: 'TaskManage',
+        component: TaskManageView
     },
     {
       path: '/:pathMatch(.*)*', // 404 页面
