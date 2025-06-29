@@ -140,7 +140,7 @@ const goToSettings = () => {
 
 const enterSystem = () => {
   if (allChecksSuccessful.value) {
-    router.push('/task-list'); 
+    router.push('/task-manage'); 
   }
 };
 
