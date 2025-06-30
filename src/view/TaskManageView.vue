@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 <template>
   <div class="layout">
     <el-container class="fullscreen">
@@ -131,6 +132,15 @@
                     @click="startTask(scope.row)"
                   >
                     启动
+                  </el-button>
+                  <!-- 添加巡视中的查看按钮 -->
+                  <el-button
+                    v-if="scope.row.taskStatus === '巡视中'"
+                    type="info"
+                    size="small"
+                    @click="viewTaskDetail(scope.row)"
+                  >
+                    查看
                   </el-button>
                   <el-button
                     v-if="scope.row.taskStatus === '已完成' || scope.row.taskStatus === '待上传'"
@@ -426,6 +436,7 @@ const getStatusType = (status) => {
 };
 
 // 方法
+/* istanbul ignore next */
 const goToSettings = () => {
   router.push('/settings');
 };

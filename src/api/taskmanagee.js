@@ -1,4 +1,5 @@
 import axios from '../utils/request';
+const baseUrl = '/api/agv/taskmanagee';
 // API 服务配置
 
 const API_BASE_URL = 'http://192.168.2.57/prod-api';
