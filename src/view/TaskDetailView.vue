@@ -1,10 +1,11 @@
+<!-- XXX：接口不确定 list or live？ -->
 <template>
   <div class="layout">
     <el-container class="fullscreen">
       <el-header class="breadcrumb-bar">
         <el-breadcrumb separator="/" class="breadcrumb-text">
           <el-breadcrumb-item :to="{ path: '/' }">地铁隧道巡检系统</el-breadcrumb-item>
-          <el-breadcrumb-item :to="{ path: '/task-list' }">任务列表</el-breadcrumb-item>
+          <el-breadcrumb-item :to="{ path: '/task-manage' }">任务列表</el-breadcrumb-item>
           <el-breadcrumb-item>任务详情</el-breadcrumb-item>
         </el-breadcrumb>
         <el-button type="primary" :icon="ArrowLeft" @click="goBack"
@@ -18,8 +19,8 @@
             <el-image
               v-if="currentFlaw"
               :key="currentFlaw.id"
-              :src="currentFlaw.flawImageUrl"
-              :preview-src-list="[currentFlaw.flawImageUrl]"
+              :src="image_base_url + currentFlaw.flawImageUrl"
+              :preview-src-list="[image_base_url + currentFlaw.flawImageUrl]"
               fit="contain"
               hide-on-click-modal
               style="width: 100%; height: 100%"
@@ -119,8 +120,8 @@
       <div v-if="editFault" class="dialog-content">
         <div class="dialog-image-container">
           <el-image
-            :src="editFault.flawImageUrl"
-            :preview-src-list="[editFault.flawImageUrl]"
+            :src="image_base_url + editFault.flawImageUrl"
+            :preview-src-list="[image_base_url + editFault.flawImageUrl]"
             fit="contain"
             style="width: 100%; height: 100%"
           />
@@ -182,9 +183,10 @@ import {
   ElMessage,
 } from 'element-plus';
 import { getTask } from '../api/task.js';
-import { listFlaw, updateFlaw } from '../api/flaw.js';
+import { listFlaw, updateFlaw, liveInfo } from '../api/flaw.js';
 import { useRoute, useRouter } from 'vue-router';
 
+const image_base_url = "http://192.168.2.57/prod-api/file";
 const route = useRoute();
 const router = useRouter();
 
@@ -216,13 +218,13 @@ const currentFlaw = ref(null);
 const editFault = ref(null);
 
 const confirmedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === true).length
+  flaws.value.filter(f => f.confirmed === true).flawLength
 );
 const suspectedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === null).length
+  flaws.value.filter(f => f.confirmed === null).flawLength
 );
 const unconfirmedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === false).length
+  flaws.value.filter(f => f.confirmed === false).flawLength
 );
 
 const getFlawStatusClass = (flaw) => {
@@ -293,7 +295,8 @@ onMounted(async () => {
   }
 
   try {
-    const flawRes = await listFlaw({ taskId });
+    const flawRes = await liveInfo(taskId);
+    console.log(flawRes)
     if (flawRes.code === 200) {
       flaws.value = flawRes.data;
       currentFlaw.value = flaws.value[0] || null;
@@ -302,7 +305,7 @@ onMounted(async () => {
     }
   } catch (error) {
     ElMessage.error('加载缺陷列表失败');
-    console.error('listFlaw error:', error);
+    console.error('liveInfo error:', error);
   }
 });
 </script>
