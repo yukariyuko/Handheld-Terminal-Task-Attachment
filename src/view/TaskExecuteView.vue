@@ -169,12 +169,32 @@
           <div class="info-card">
             <div class="card-header">
               <h3>车辆状态</h3>
-              <el-switch
-                v-model="agvRunning"
-                active-text="前进"
-                inactive-text="停止"
-                @change="toggleAgvMovement"
-              />
+              <div class="agv-controls">
+                <el-button
+                  type="success"
+                  size="small"
+                  :disabled="!consoleEnabled || agvMovementState === 'forward'"
+                  @click="controlAgvMovement('forward')"
+                >
+                  前进
+                </el-button>
+                <el-button
+                  type="info"
+                  size="small"
+                  :disabled="!consoleEnabled || agvMovementState === 'stopped'"
+                  @click="controlAgvMovement('stopped')"
+                >
+                  停止
+                </el-button>
+                <el-button
+                  type="warning"
+                  size="small"
+                  :disabled="!consoleEnabled || agvMovementState === 'backward'"
+                  @click="controlAgvMovement('backward')"
+                >
+                  后退
+                </el-button>
+              </div>
             </div>
             <div class="card-body">
               <div class="info-item">
@@ -184,6 +204,16 @@
               <div class="info-item">
                 <span class="info-label">⏰ 车辆系统时间</span>
                 <span class="info-value">{{ systemTime }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">🚛 运动状态</span>
+                <span class="info-value" :class="{
+                  'status-forward': agvMovementState === 'forward',
+                  'status-backward': agvMovementState === 'backward',
+                  'status-stopped': agvMovementState === 'stopped'
+                }">
+                  {{ agvMovementState === 'forward' ? '前进中' : agvMovementState === 'backward' ? '后退中' : '已停止' }}
+                </span>
               </div>
               <div class="info-item">
                 <span class="info-label">📍 已行驶距离</span>
@@ -344,9 +374,10 @@ import { ArrowLeft, Refresh, Check, Close } from '@element-plus/icons-vue';
 
 // API 导入
 import { getTask, startTask, endTask } from '../api/task.js';
-import { liveInfo, updateFlaw } from '../api/flaw.js';
-import { heartbeat, agvForward, agvStop } from '../api/movement.js';
-import { getEasyDevices } from '../api/camera.js';
+import { liveInfo, updateFlaw, checkAllConfirmed } from '../api/flaw.js';
+import { heartbeat, agvForward, agvStop, agvBackward } from '../api/movement.js';
+import { getEasyDevices, getVideoStreamUrl } from '../api/camera.js';
+import { checkFs, checkDb, checkAgv, checkCam } from '../api/system.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -370,12 +401,26 @@ const videoPlayer = ref(null);
 const currentVideoStream = ref('');
 const selectedCamera = ref(0);
 const cameraList = ref(['摄像头1', '摄像头2', '摄像头3', '摄像头4']);
+const cameraDevices = ref([]); // 存储实际的摄像头设备信息
 const audioVolume = ref(50);
 const audioMuted = ref(false);
 
 // 控制相关
 const consoleEnabled = ref(true);
-const agvRunning = ref(false);
+const agvMovementState = ref('stopped'); // 'forward', 'stopped', 'backward'
+const agvStatus = ref({
+  sysTime: '',
+  isRunning: false,
+  currentPosition: 0
+});
+
+// 系统状态
+const systemStatus = ref({
+  fs: true,
+  db: true,
+  agv: true,
+  cam: true
+});
 
 // 实时数据
 const systemTime = ref('');
@@ -387,6 +432,8 @@ let heartbeatTimer = null;
 let flawUpdateTimer = null;
 let timeUpdateTimer = null;
 let distanceUpdateTimer = null;
+let agvStatusTimer = null;
+let systemCheckTimer = null;
 
 // 计算属性
 const progressPercentage = computed(() => {
@@ -419,8 +466,8 @@ const loadTaskInfo = async () => {
   try {
     const taskId = route.params.id;
     const response = await getTask(taskId);
-    if (response.data.code === 200) {
-      taskInfo.value = response.data.data;
+    if (response.code === 200) {
+      taskInfo.value = response.data;
       if (taskInfo.value.taskTrip) {
         const match = taskInfo.value.taskTrip.match(/(\d+)/);
         if (match) {
@@ -437,13 +484,15 @@ const loadTaskInfo = async () => {
 const loadCameraList = async () => {
   try {
     const response = await getEasyDevices();
-    if (response.data && response.data.data) {
-      cameraList.value = response.data.data.map((device, index) => 
+    if (response && response.data && Array.isArray(response.data)) {
+      cameraDevices.value = response.data;
+      cameraList.value = response.data.map((device, index) => 
         device.name || `摄像头${index + 1}`
       );
     }
   } catch (error) {
     console.error('Load camera list error:', error);
+    ElMessage.warning('加载摄像头列表失败，使用默认配置');
   }
 };
 
@@ -455,24 +504,47 @@ const refreshVideo = () => {
 
 const switchCamera = (cameraIndex) => {
   selectedCamera.value = cameraIndex;
-  // 根据摄像头ID构建流媒体地址
-  const cameraId = `camera${cameraIndex + 1}`;
-  currentVideoStream.value = `/webrtc-api/live/${cameraId}_01.flv`;
+  
+  let cameraId;
+  if (cameraDevices.value && cameraDevices.value[cameraIndex]) {
+    // 使用实际的摄像头ID
+    cameraId = cameraDevices.value[cameraIndex].id || `camera${cameraIndex + 1}`;
+  } else {
+    // 回退到默认的摄像头ID
+    cameraId = `camera${cameraIndex + 1}`;
+  }
+  
+  // 使用camera.js中的函数获取视频流地址
+  currentVideoStream.value = getVideoStreamUrl(cameraId);
   ElMessage.info(`已切换到${currentCameraName.value}`);
 };
 
-const toggleAgvMovement = async (running) => {
+
+
+// 新的AGV控制方法
+const controlAgvMovement = async (direction) => {
   try {
-    if (running) {
-      await agvForward();
-      ElMessage.success('AGV开始前进');
-    } else {
-      await agvStop();
-      ElMessage.success('AGV已停止');
+    const previousState = agvMovementState.value;
+    agvMovementState.value = direction;
+    
+    switch (direction) {
+      case 'forward':
+        await agvForward();
+        ElMessage.success('AGV开始前进');
+        break;
+      case 'backward':
+        await agvBackward();
+        ElMessage.success('AGV开始后退');
+        break;
+      case 'stopped':
+        await agvStop();
+        ElMessage.success('AGV已停止');
+        break;
     }
   } catch (error) {
-    ElMessage.error(running ? 'AGV启动失败' : 'AGV停止失败');
-    agvRunning.value = !running; // 回滚状态
+    // 回滚状态
+    agvMovementState.value = previousState;
+    ElMessage.error(`AGV${direction === 'forward' ? '前进' : direction === 'backward' ? '后退' : '停止'}失败`);
   }
 };
 
@@ -487,6 +559,27 @@ const completeTask = async () => {
         type: 'success'
       }
     );
+    
+    // 检查是否所有故障都已确认
+    try {
+      const checkResponse = await checkAllConfirmed(taskInfo.value.id);
+      if (checkResponse.code === 200 && !checkResponse.data) {
+        const continueComplete = await ElMessageBox.confirm(
+          '还有未确认的故障，确定要完成任务吗？',
+          '确认完成',
+          {
+            confirmButtonText: '确定完成',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        );
+        if (continueComplete !== 'confirm') {
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('检查故障确认状态失败:', error);
+    }
     
     await endTask(taskInfo.value.id, false);
     ElMessage.success('巡检任务已完成');
@@ -571,14 +664,69 @@ const formatTooltip = (value) => {
   return `${value}%`;
 };
 
+// 获取AGV实时状态
+const getAgvStatus = async () => {
+  try {
+    const response = await heartbeat();
+    if (response.code === 200 && response.data) {
+      const statusData = response.data;
+      agvStatus.value = {
+        sysTime: statusData.sysTime || new Date().toLocaleString('zh-CN'),
+        isRunning: statusData.isRunning || false,
+        currentPosition: statusData.currentPosition || currentDistance.value
+      };
+      
+      // 更新页面显示的数据
+      systemTime.value = agvStatus.value.sysTime;
+      // 根据实际运行状态更新运动状态
+      if (!agvStatus.value.isRunning && agvMovementState.value !== 'stopped') {
+        agvMovementState.value = 'stopped';
+      }
+      currentDistance.value = agvStatus.value.currentPosition;
+    }
+  } catch (error) {
+    console.error('Get AGV status failed:', error);
+    systemStatus.value.agv = false;
+  }
+};
+
+// 检查系统状态
+const checkSystemStatus = async () => {
+  try {
+    // 并行检查所有系统状态
+    const [fsResult, dbResult, agvResult, camResult] = await Promise.allSettled([
+      checkFs(),
+      checkDb(),
+      checkAgv(),
+      checkCam()
+    ]);
+
+    systemStatus.value = {
+      fs: fsResult.status === 'fulfilled' && fsResult.value?.code === 200,
+      db: dbResult.status === 'fulfilled' && dbResult.value?.code === 200,
+      agv: agvResult.status === 'fulfilled' && agvResult.value?.code === 200,
+      cam: camResult.status === 'fulfilled' && camResult.value?.code === 200
+    };
+
+    // 如果有系统故障，给出警告
+    const failedSystems = [];
+    if (!systemStatus.value.fs) failedSystems.push('文件系统');
+    if (!systemStatus.value.db) failedSystems.push('数据库');
+    if (!systemStatus.value.agv) failedSystems.push('AGV连接');
+    if (!systemStatus.value.cam) failedSystems.push('摄像头');
+
+    if (failedSystems.length > 0) {
+      ElMessage.warning(`系统检查发现问题: ${failedSystems.join(', ')}`);
+    }
+  } catch (error) {
+    console.error('System status check failed:', error);
+  }
+};
+
 // 定时器函数
 const startHeartbeat = () => {
   heartbeatTimer = setInterval(async () => {
-    try {
-      await heartbeat();
-    } catch (error) {
-      console.error('Heartbeat failed:', error);
-    }
+    await getAgvStatus();
   }, 5000);
 };
 
@@ -586,8 +734,8 @@ const startFlawUpdate = () => {
   flawUpdateTimer = setInterval(async () => {
     try {
       const response = await liveInfo(taskInfo.value.id);
-      if (response.data.code === 200) {
-        realTimeFlaws.value = response.data.data || [];
+      if (response.code === 200) {
+        realTimeFlaws.value = response.data || [];
       }
     } catch (error) {
       console.error('Update flaws failed:', error);
@@ -597,8 +745,10 @@ const startFlawUpdate = () => {
 
 const startTimeUpdate = () => {
   const updateTime = () => {
-    const now = new Date();
-    systemTime.value = now.toLocaleString('zh-CN');
+    if (!agvStatus.value.sysTime) {
+      const now = new Date();
+      systemTime.value = now.toLocaleString('zh-CN');
+    }
   };
   
   updateTime();
@@ -607,21 +757,38 @@ const startTimeUpdate = () => {
 
 const startDistanceUpdate = () => {
   distanceUpdateTimer = setInterval(() => {
-    if (agvRunning.value) {
+    // 如果从AGV状态获取到了位置信息，就不需要模拟了
+    if (!agvStatus.value.currentPosition && agvMovementState.value === 'forward') {
       // 模拟AGV前进，每次更新增加0.5-2米
       currentDistance.value += Math.random() * 1.5 + 0.5;
       if (currentDistance.value >= taskTotalDistance.value) {
         currentDistance.value = taskTotalDistance.value;
-        agvRunning.value = false;
+        agvMovementState.value = 'stopped';
+      }
+    } else if (!agvStatus.value.currentPosition && agvMovementState.value === 'backward') {
+      // 模拟AGV后退，每次更新减少0.5-2米
+      currentDistance.value -= Math.random() * 1.5 + 0.5;
+      if (currentDistance.value <= 0) {
+        currentDistance.value = 0;
+        agvMovementState.value = 'stopped';
       }
     }
   }, 2000);
+};
+
+const startSystemCheck = () => {
+  systemCheckTimer = setInterval(async () => {
+    await checkSystemStatus();
+  }, 30000); // 每30秒检查一次系统状态
 };
 
 // 生命周期
 onMounted(async () => {
   await loadTaskInfo();
   await loadCameraList();
+  
+  // 初始系统状态检查
+  await checkSystemStatus();
   
   // 启动任务
   try {
@@ -635,6 +802,7 @@ onMounted(async () => {
   startFlawUpdate();
   startTimeUpdate();
   startDistanceUpdate();
+  startSystemCheck();
   
   // 初始化视频流
   switchCamera(0);
@@ -646,6 +814,8 @@ onUnmounted(() => {
   if (flawUpdateTimer) clearInterval(flawUpdateTimer);
   if (timeUpdateTimer) clearInterval(timeUpdateTimer);
   if (distanceUpdateTimer) clearInterval(distanceUpdateTimer);
+  if (agvStatusTimer) clearInterval(agvStatusTimer);
+  if (systemCheckTimer) clearInterval(systemCheckTimer);
 });
 </script>
 
@@ -982,5 +1152,33 @@ onUnmounted(() => {
 
 .dialog-footer {
   text-align: right;
+}
+
+.agv-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agv-controls .el-button {
+  min-width: 48px;
+  height: 28px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.status-forward {
+  color: #67c23a;
+  font-weight: bold;
+}
+
+.status-backward {
+  color: #e6a23c;
+  font-weight: bold;
+}
+
+.status-stopped {
+  color: #909399;
+  font-weight: bold;
 }
 </style> 
