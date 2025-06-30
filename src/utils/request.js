@@ -1,7 +1,6 @@
 import axios from 'axios';
 
 const service = axios.create({
-  baseURL: '/api', // 统一前缀，vite.config.js 中代理 /api => 后端地址
   timeout: 5000,
 });
 

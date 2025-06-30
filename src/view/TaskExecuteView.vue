@@ -376,7 +376,8 @@ import { ArrowLeft, Refresh, Check, Close } from '@element-plus/icons-vue';
 import { getTask, startTask, endTask } from '../api/task.js';
 import { liveInfo, updateFlaw, checkAllConfirmed } from '../api/flaw.js';
 import { heartbeat, agvForward, agvStop, agvBackward } from '../api/movement.js';
-import { getEasyDevices, getVideoStreamUrl } from '../api/camera.js';
+import { getEasyDevices } from '../api/camera.js';
+import { getVideoStreamUrl } from '../api/webrtc.js';
 import { checkFs, checkDb, checkAgv, checkCam } from '../api/system.js';
 
 const route = useRoute();
