@@ -5,7 +5,7 @@
       <el-header class="breadcrumb-bar">
         <el-breadcrumb separator="/" class="breadcrumb-text">
           <el-breadcrumb-item :to="{ path: '/' }">地铁隧道巡检系统</el-breadcrumb-item>
-          <el-breadcrumb-item :to="{ path: '/task-list' }">任务列表</el-breadcrumb-item>
+          <el-breadcrumb-item :to="{ path: '/task-manage' }">任务列表</el-breadcrumb-item>
           <el-breadcrumb-item>任务详情</el-breadcrumb-item>
         </el-breadcrumb>
         <el-button type="primary" :icon="ArrowLeft" @click="goBack"
