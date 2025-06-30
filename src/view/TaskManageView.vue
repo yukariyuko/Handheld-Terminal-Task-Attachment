@@ -311,8 +311,7 @@ import {
   updateTask, 
   delTask, 
   startTask as apiStartTask,
-  uploadTask as apiUploadTask,
-  getTask 
+  uploadTask as apiUploadTask
 } from '../api/taskmanagee.js';
 
 const router = useRouter();
