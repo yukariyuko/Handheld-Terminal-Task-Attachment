@@ -482,18 +482,150 @@ const loadTaskInfo = async () => {
   }
 };
 
-const loadCameraList = async () => {
+// 测试摄像头API连接的辅助函数
+const testCameraApiConnection = async () => {
+  console.log('--- 开始测试摄像头API连接 ---');
   try {
-    const response = await getEasyDevices();
-    if (response && response.data && Array.isArray(response.data)) {
-      cameraDevices.value = response.data;
-      cameraList.value = response.data.map((device, index) => 
-        device.name || `摄像头${index + 1}`
-      );
-    }
+    // 尝试基本的网络连接测试
+    const testUrl = new URL('/easy-api/devices', window.location.origin);
+    console.log('测试连接到:', testUrl.toString());
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(testUrl, {
+      method: 'HEAD',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    console.log('连接测试状态码:', response.status);
+    console.log('连接测试响应头:', Object.fromEntries(response.headers.entries()));
+    
+    return response.ok;
   } catch (error) {
-    console.error('Load camera list error:', error);
-    ElMessage.warning('加载摄像头列表失败，使用默认配置');
+    console.error('连接测试失败:', error);
+    return false;
+  }
+};
+
+const loadCameraList = async () => {
+  console.log('=== 开始加载摄像头列表 ===');
+  
+  // 先进行连接测试
+  const isConnected = await testCameraApiConnection();
+  console.log('API连接测试结果:', isConnected ? '成功' : '失败');
+  
+  try {
+    console.log('正在调用 getEasyDevices() API...');
+    console.log('API 请求URL: /easy-api/devices');
+    console.log('API 请求参数:', { page: 1, size: 999, status: '', id: '', name: '' });
+    console.log('API 请求头:', { 'Authorization': 'Basic YWRtaW4xMjM6QWRtaW5AMTIz' });
+    
+    const response = await getEasyDevices();
+    
+    console.log('API 响应原始数据:', JSON.stringify(response, null, 2));
+    console.log('响应数据类型:', typeof response);
+    console.log('响应是否存在:', !!response);
+    
+    if (response) {
+      console.log('响应对象属性列表:', Object.keys(response));
+      console.log('response.items 是否存在:', !!response.items);
+      console.log('response.items 类型:', typeof response.items);
+      console.log('response.items 是否为数组:', Array.isArray(response.items));
+      
+      if (response.items) {
+        console.log('response.items 长度:', response.items.length);
+        console.log('response.items 内容:', JSON.stringify(response.items, null, 2));
+      }
+    }
+    
+    // 检查新的响应数据格式：response.data.items
+    const cameraItems = response?.data?.items;
+    console.log('提取的摄像头数据:', JSON.stringify(cameraItems, null, 2));
+    
+    if (cameraItems && Array.isArray(cameraItems)) {
+      console.log('✓ 响应数据验证通过，开始处理摄像头设备列表');
+      
+      cameraDevices.value = cameraItems;
+      console.log('设置 cameraDevices.value:', JSON.stringify(cameraDevices.value, null, 2));
+      
+      cameraList.value = cameraItems.map((device, index) => {
+        const deviceName = device.name || `摄像头${index + 1}`;
+        console.log(`处理设备 ${index}: 原始名称="${device.name}", 最终名称="${deviceName}"`);
+        console.log(`设备 ${index} 完整信息:`, JSON.stringify(device, null, 2));
+        return deviceName;
+      });
+      
+      console.log('最终摄像头名称列表:', JSON.stringify(cameraList.value, null, 2));
+      console.log('摄像头设备数量:', cameraList.value.length);
+    } else {
+      console.warn('⚠️ 响应数据验证失败，使用默认摄像头配置');
+      console.log('期望数据路径: response.data.items');
+      console.log('实际响应结构检查:');
+      console.log('- response 存在:', !!response);
+      console.log('- response.data 存在:', !!response?.data);
+      console.log('- response.data.items 存在:', !!response?.data?.items);
+      console.log('- response.data.items 是数组:', Array.isArray(response?.data?.items));
+      if (response?.data?.items) {
+        console.log('- response.data.items 长度:', response.data.items.length);
+        console.log('- response.data.items 内容预览:', JSON.stringify(response.data.items.slice(0, 2), null, 2));
+      }
+      console.log('默认摄像头列表:', JSON.stringify(cameraList.value, null, 2));
+    }
+    
+    console.log('=== 摄像头列表加载完成 ===');
+    
+  } catch (error) {
+    console.error('=== 加载摄像头列表发生错误 ===');
+    
+    // 详细分析错误类型和内容
+    console.error('错误的原始值:', error);
+    console.error('错误数据类型:', typeof error);
+    console.error('错误是否为字符串:', typeof error === 'string');
+    console.error('错误是否为Error对象:', error instanceof Error);
+    
+    if (typeof error === 'string') {
+      console.error('字符串错误内容:', error);
+      console.error('字符串长度:', error.length);
+    } else if (error instanceof Error) {
+      console.error('Error对象 - 构造函数名称:', error.constructor.name);
+      console.error('Error对象 - 错误消息:', error.message);
+      console.error('Error对象 - 错误堆栈:', error.stack);
+    } else if (error && typeof error === 'object') {
+      console.error('对象错误 - 属性列表:', Object.keys(error));
+      console.error('对象错误 - JSON字符串:', JSON.stringify(error, null, 2));
+      if (error.message) console.error('对象错误 - message属性:', error.message);
+      if (error.code) console.error('对象错误 - code属性:', error.code);
+      if (error.status) console.error('对象错误 - status属性:', error.status);
+    } else {
+      console.error('未知类型错误, 值为:', error);
+    }
+    
+    // 尝试从错误中提取有用信息
+    let errorMessage = '未知错误';
+    if (typeof error === 'string') {
+      errorMessage = error;
+      if (error === 'Error') {
+        errorMessage = '摄像头服务响应错误 - 可能是服务未启动或网络连接问题';
+      }
+    } else if (error && error.message) {
+      errorMessage = error.message;
+    } else if (error && error.toString) {
+      errorMessage = error.toString();
+    }
+    
+    console.error('提取的错误信息:', errorMessage);
+    
+    // 根据错误类型给出更具体的建议
+    let suggestion = '';
+    if (typeof error === 'string' && error === 'Error') {
+      suggestion = '建议检查：1) 摄像头服务是否正常启动 2) 网络连接是否正常 3) API端点是否正确';
+    }
+    
+    console.error('错误处理建议:', suggestion);
+    ElMessage.warning(`加载摄像头列表失败: ${errorMessage}，使用默认配置`);
+    console.log('回退到默认摄像头配置:', JSON.stringify(cameraList.value, null, 2));
   }
 };
 
@@ -506,17 +638,20 @@ const refreshVideo = () => {
 const switchCamera = (cameraIndex) => {
   selectedCamera.value = cameraIndex;
   
-  let cameraId;
   if (cameraDevices.value && cameraDevices.value[cameraIndex]) {
-    // 使用实际的摄像头ID
-    cameraId = cameraDevices.value[cameraIndex].id || `camera${cameraIndex + 1}`;
+    // 使用实际的摄像头URL
+    const device = cameraDevices.value[cameraIndex];
+    if (device.url) {
+      currentVideoStream.value = device.url;
+    } else {
+      // 如果没有URL，使用 getVideoStreamUrl 作为回退
+      currentVideoStream.value = getVideoStreamUrl(device.id || `camera${cameraIndex + 1}`);
+    }
   } else {
     // 回退到默认的摄像头ID
-    cameraId = `camera${cameraIndex + 1}`;
+    currentVideoStream.value = getVideoStreamUrl(`camera${cameraIndex + 1}`);
   }
   
-  // 使用camera.js中的函数获取视频流地址
-  currentVideoStream.value = getVideoStreamUrl(cameraId);
   ElMessage.info(`已切换到${currentCameraName.value}`);
 };
 
