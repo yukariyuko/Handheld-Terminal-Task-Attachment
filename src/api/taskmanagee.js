@@ -126,39 +126,7 @@ export function agvBackward() {
     return axios.post(`${API_BASE_URL}/agv/movement/backward`);
 }
 
-// ==================== 系统检查相关接口 ====================
 
-/**
- * 检查文件系统可用性
- * @returns {Promise}
- */
-export function checkFs() {
-    return axios.get(`${API_BASE_URL}/system/check/fs`);
-}
-
-/**
- * 检查数据库连接
- * @returns {Promise}
- */
-export function checkDb() {
-    return axios.get(`${API_BASE_URL}/system/check/db`);
-}
-
-/**
- * 检查AGV连接
- * @returns {Promise}
- */
-export function checkAgv() {
-    return axios.get(`${API_BASE_URL}/system/check/agv`);
-}
-
-/**
- * 检查摄像头连接
- * @returns {Promise}
- */
-export function checkCam() {
-    return axios.get(`${API_BASE_URL}/system/check/cam`);
-}
 
 // ==================== 巡视任务管理相关接口 ====================
 

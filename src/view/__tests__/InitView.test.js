@@ -158,19 +158,19 @@ describe('InitView.vue', () => {
   })
 
   describe('配置数据', () => {
-    it('应该正确显示数据库地址', () => {
+    it('应该正确显示数据库检查标签', () => {
       const dbLabel = wrapper.findAll('.check-label')[1]
-      expect(dbLabel.text()).toContain('localhost')
+      expect(dbLabel.text()).toBe('检测数据库通信')
     })
 
-    it('应该正确显示AGV地址', () => {
+    it('应该正确显示AGV检查标签', () => {
       const agvLabel = wrapper.findAll('.check-label')[2]
-      expect(agvLabel.text()).toContain('192.168.1.200')
+      expect(agvLabel.text()).toBe('与车辆控制系统通信')
     })
 
-    it('应该正确显示摄像头地址', () => {
+    it('应该正确显示摄像头检查标签', () => {
       const camLabel = wrapper.findAll('.check-label')[3]
-      expect(camLabel.text()).toContain('192.168.1.101')
+      expect(camLabel.text()).toBe('检测摄像头通信')
     })
   })
 }) 
