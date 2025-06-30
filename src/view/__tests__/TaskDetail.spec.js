@@ -1,22 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-// 正常导入 vue-router 的真实成员
 import { createRouter, createWebHistory } from 'vue-router';
 import ElementPlus, { ElMessage } from 'element-plus';
-import { ArrowLeft } from '@element-plus/icons-vue';
 import TaskDetail from '../TaskDetailView.vue';
 
 // --- Mocks ---
-vi.mock('../utils/request.js', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), create: vi.fn(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), interceptors: { response: { use: vi.fn() }, request: { use: vi.fn() } } })) } }));
-vi.mock('../../api/task.js', () => ({ getTask: vi.fn() }));
-vi.mock('../../api/flaw.js', () => ({ listFlaw: vi.fn(), updateFlaw: vi.fn() }));
+// 1. 在 Mock 中添加 liveInfo
+vi.mock('../../api/flaw.js', () => ({
+  listFlaw: vi.fn(),
+  updateFlaw: vi.fn(),
+  liveInfo: vi.fn(), // 确保新的 API 函数被 mock
+}));
 
-// ✨✨✨ 使用最稳健的部分模拟方式 ✨✨✨
+vi.mock('../../api/task.js', () => ({
+  getTask: vi.fn(),
+}));
+
 vi.mock('vue-router', async (importOriginal) => {
-  const actual = await importOriginal(); // 导入真实的 vue-router 模块
+  const actual = await importOriginal();
   return {
-    ...actual, // 保留所有真实导出，如 createRouter, createWebHistory
-    // 只覆盖我们需要控制的 useRoute 和 useRouter
+    ...actual,
     useRoute: vi.fn(),
     useRouter: vi.fn(),
   };
@@ -26,10 +29,10 @@ vi.spyOn(ElMessage, 'success').mockImplementation(() => {});
 vi.spyOn(ElMessage, 'warning').mockImplementation(() => {});
 vi.spyOn(ElMessage, 'error').mockImplementation(() => {});
 
-// 在模拟设置之后导入被测试的模块
+// 2. 导入正确的 API 函数
 import { getTask } from '../../api/task.js';
-import { listFlaw, updateFlaw } from '../../api/flaw.js';
-import { useRoute, useRouter } from 'vue-router'; // 这里导入的将是上面 vi.mock 中定义的 mock 函数
+import { updateFlaw, liveInfo } from '../../api/flaw.js';
+import { useRoute, useRouter } from 'vue-router';
 
 // --- Mock Data ---
 const mockTask = { id: 'task-01', endTime: '2025-06-28 10:30:00', taskTrip: '1500.0' };
@@ -38,6 +41,9 @@ const mockFlaws = [
   { id: 'flaw-102', flawName: '轨道积水', flawType: '环境类', flawDistance: 800, flawImageUrl: '/images/flaw2.jpg', confirmed: null, remark: '' },
   { id: 'flaw-103', flawName: '信号灯异常', flawType: '设备类', flawDistance: 1200, flawImageUrl: '/images/flaw3.jpg', confirmed: false, remark: '误报' },
 ];
+// 辅助变量，与组件中的保持一致
+const image_base_url = "http://192.168.2.57/prod-api/file";
+
 
 describe('TaskDetail.vue', () => {
   let router;
@@ -46,17 +52,16 @@ describe('TaskDetail.vue', () => {
     vi.clearAllMocks();
 
     getTask.mockResolvedValue({ code: 200, data: mockTask });
-    listFlaw.mockResolvedValue({ code: 200, data: mockFlaws });
+    // 3. Mock liveInfo 的返回值，而不是 listFlaw
+    liveInfo.mockResolvedValue({ code: 200, data: mockFlaws });
     updateFlaw.mockResolvedValue({ code: 200, msg: '更新成功' });
 
     const mockRouter = { back: vi.fn(), push: vi.fn() };
-    // ✨ 使用 mockImplementation，功能等价但更稳定
     useRouter.mockImplementation(() => mockRouter);
     useRoute.mockImplementation(() => ({
       params: { id: 'task-01' },
     }));
 
-    // 这里使用的是真实的 createRouter，因为我们的 mock 保留了它
     router = createRouter({
       history: createWebHistory(),
       routes: [
@@ -72,9 +77,7 @@ describe('TaskDetail.vue', () => {
     return mount(TaskDetail, {
       global: {
         plugins: [router, ElementPlus],
-        stubs: {
-          'el-icon': true // Stub el-icon to avoid warnings with ArrowLeft
-        },
+        stubs: { 'el-icon': true },
         ...options.global,
       },
       ...options,
@@ -86,7 +89,8 @@ describe('TaskDetail.vue', () => {
       mountComponent();
       await flushPromises();
       expect(getTask).toHaveBeenCalledWith('task-01');
-      expect(listFlaw).toHaveBeenCalledWith({ taskId: 'task-01' });
+      // 4. 验证 liveInfo 被调用，参数是字符串 ID
+      expect(liveInfo).toHaveBeenCalledWith('task-01');
     });
 
     it('应该正确渲染任务信息卡片', async () => {
@@ -119,7 +123,8 @@ describe('TaskDetail.vue', () => {
       const wrapper = mountComponent();
       await flushPromises();
       const image = wrapper.findComponent({ name: 'ElImage' });
-      expect(image.props('src')).toBe(mockFlaws[0].flawImageUrl);
+      // 5. 验证图片的 src 包含了 base_url
+      expect(image.props('src')).toBe(image_base_url + mockFlaws[0].flawImageUrl);
     });
   });
 
@@ -127,7 +132,6 @@ describe('TaskDetail.vue', () => {
     it('点击返回按钮应该调用 router.back', async () => {
       const wrapper = mountComponent();
       await flushPromises();
-      // Find the button by its content and class
       const backButton = wrapper.findAll('button').find(b => b.text() === '返回');
       await backButton.trigger('click');
       expect(useRouter().back).toHaveBeenCalledTimes(1);
@@ -140,14 +144,13 @@ describe('TaskDetail.vue', () => {
       await quickViewLinks[1].trigger('click');
       expect(wrapper.vm.currentFlaw.id).toBe(mockFlaws[1].id);
       const image = wrapper.findComponent({ name: 'ElImage' });
-      expect(image.props('src')).toBe(mockFlaws[1].flawImageUrl);
+      expect(image.props('src')).toBe(image_base_url + mockFlaws[1].flawImageUrl);
       expect(ElMessage.success).toHaveBeenCalledWith(`快速预览: ${mockFlaws[1].flawName}`);
     });
 
     it('点击表格行应打开详情对话框', async () => {
       const wrapper = mountComponent();
       await flushPromises();
-      // Dialog is controlled by v-if, so it should not exist in the DOM initially.
       expect(wrapper.find('.el-dialog').exists()).toBe(false);
       const tableRows = wrapper.findAll('.el-table__row');
       await tableRows[2].trigger('click');
@@ -201,18 +204,11 @@ describe('TaskDetail.vue', () => {
     it('当通过 v-model 的双向绑定关闭对话框时（如按 ESC 或点击右上角 X），应正确更新状态', async () => {
       const wrapper = mountComponent();
       await flushPromises();
-
-      // 1. Open the dialog
       await wrapper.findAll('.el-table__row')[0].trigger('click');
       await wrapper.vm.$nextTick();
       expect(wrapper.vm.dialogVisible).toBe(true);
-
-      // 2. Find the dialog component and simulate the 'update:modelValue' event
-      // This is what v-model listens for when the dialog is closed internally
       const dialog = wrapper.findComponent({ name: 'ElDialog' });
       await dialog.vm.$emit('update:modelValue', false);
-
-      // 3. Assert the component's state is updated
       await wrapper.vm.$nextTick();
       expect(wrapper.vm.dialogVisible).toBe(false);
     });
@@ -241,22 +237,23 @@ describe('TaskDetail.vue', () => {
       expect(ElMessage.error).toHaveBeenCalledWith('加载任务失败');
     });
 
+    // 6. 更新异常测试以使用 liveInfo
     it('当获取缺陷列表API返回业务错误时，应显示警告', async () => {
-      listFlaw.mockResolvedValue({ code: 500, msg: '数据库查询出错' });
+      liveInfo.mockResolvedValue({ code: 500, msg: '数据库查询出错' });
       mountComponent();
       await flushPromises();
       expect(ElMessage.warning).toHaveBeenCalledWith('加载缺陷列表异常: 数据库查询出错');
     });
 
     it('当获取缺陷列表API网络失败时，应显示错误', async () => {
-      listFlaw.mockRejectedValue(new Error('Network Error'));
+      liveInfo.mockRejectedValue(new Error('Network Error'));
       mountComponent();
       await flushPromises();
       expect(ElMessage.error).toHaveBeenCalledWith('加载缺陷列表失败');
     });
 
     it('当缺陷列表为空时，应显示占位符文本', async () => {
-      listFlaw.mockResolvedValue({ code: 200, data: [] });
+      liveInfo.mockResolvedValue({ code: 200, data: [] });
       const wrapper = mountComponent();
       await flushPromises();
       expect(wrapper.find('.image-placeholder').text()).toContain('请选择一个故障');
