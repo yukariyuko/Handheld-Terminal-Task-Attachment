@@ -15,10 +15,28 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5173',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/api/, ''),
-      }
+          // 目标主机地址
+          target: 'http://192.168.2.57', 
+          changeOrigin: true,
+          // 把前端请求路径中的 /api 替换为后端的 /prod-api
+          rewrite: (path) => path.replace(/^\/api/, '/prod-api'),
+        },
+
+        // 规则二：代理 WebRTC 服务
+        '/webrtc-api': {
+          target: 'http://192.168.2.57',
+          changeOrigin: true,
+          // 注意：这里前端的“暗号”和后端的路径完全一样，
+          // 所以我们甚至不需要 rewrite，代理会自动拼接。
+          // Vite 会把 /webrtc-api/stream/start 转发到 http://192.168.2.57/webrtc-api/stream/start
+        },
+
+        // 规则三：代理摄像头服务
+        '/easy-api': {
+          target: 'http://192.168.2.57',
+          changeOrigin: true,
+          // 这里也一样，前端暗号和后端路径一致，无需 rewrite
+        }
     }
   },
   test: {
