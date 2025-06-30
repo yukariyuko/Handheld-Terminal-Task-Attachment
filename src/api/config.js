@@ -29,7 +29,7 @@ export const useConfigStore = defineStore('config', () => {
     // 添加一个状态来标记是否需要刷新系统检查
     const needRefresh = ref(false);
     
-    const API_BASE_URL = 'http://192.168.2.57/prod-api'; // 使用相对路径，通过 vite 代理和 mock 处理
+    const API_BASE_URL = '/api'; // 使用相对路径，通过 vite 代理和 mock 处理
 
 
     const host = () => {

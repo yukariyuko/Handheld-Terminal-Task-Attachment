@@ -1,7 +1,7 @@
 import axios from '../utils/request';
 
 // 摄像头相关接口
-const baseUrl = 'http://192.168.2.57/easy-api';
+const baseUrl = '/easy-api';
 
 /**
  * 获取车内所有摄像头设备列表
@@ -21,11 +21,3 @@ export function getEasyDevices() {
     }
   });
 }
-
-/**
- * 获取指定摄像头的视频流地址
- * @param {string} cameraId 摄像头ID
- */
-export function getVideoStreamUrl(cameraId) {
-  return `http://192.168.2.57/webrtc-api/live/${cameraId}_01.flv`;
-} 
