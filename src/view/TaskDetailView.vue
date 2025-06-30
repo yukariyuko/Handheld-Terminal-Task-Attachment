@@ -218,13 +218,13 @@ const currentFlaw = ref(null);
 const editFault = ref(null);
 
 const confirmedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === true).flawLength
+  flaws.value.filter(f => f.confirmed === true).length
 );
 const suspectedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === null).flawLength
+  flaws.value.filter(f => f.confirmed === null).length
 );
 const unconfirmedCount = computed(() =>
-  flaws.value.filter(f => f.confirmed === false).flawLength
+  flaws.value.filter(f => f.confirmed === false).length
 );
 
 const getFlawStatusClass = (flaw) => {
