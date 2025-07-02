@@ -1,9 +1,8 @@
 import axios from '../utils/request';
 
 // 服务器基础URL
-const MEDIA_SERVER_URL = 'http://192.168.2.57';
-const WEBRTC_BASE_URL = `${MEDIA_SERVER_URL}/webrtc-api`;
-const EASY_BASE_URL = `${MEDIA_SERVER_URL}/easy-api`;
+const WEBRTC_BASE_URL = `/webrtc-api`;
+const EASY_BASE_URL = `/easy-api`;
 
 /**
  * 获取视频流地址
@@ -12,7 +11,18 @@ const EASY_BASE_URL = `${MEDIA_SERVER_URL}/easy-api`;
  * @returns {string} 完整的视频流URL
  */
 export function getVideoStreamUrl(cameraId, protocol = 'webrtc') {
-    return `${WEBRTC_BASE_URL}/live/${cameraId}_01.flv`;
+    if(import.meta.env.DEV){
+        const map = {
+            'camera_front': 'front',
+            'camera_left': 'left',
+            'camera_right': 'right',
+            'camera_back': 'back'
+        }
+        const cameraName = map[cameraId] || 'default';
+        return `http://localhost:8000/live/${cameraName}.flv`;
+    }else{
+        return `http://192.168.2.57/webrtc-api/live/${cameraId}_01.flv`;
+    }
 }
 
 /**
