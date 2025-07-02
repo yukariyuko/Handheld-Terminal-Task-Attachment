@@ -122,8 +122,8 @@ function onCancel() {
   // 此处逻辑与线框图中的JS代码一致
   if (confirm('确定要取消设置吗？未保存的更改将丢失。')) {
     if (originalConfigData) {
-      // 恢复到初始加载的数据
-      configData.value = JSON.parse(JSON.stringify(originalConfigData));
+      // 恢复到初始加载的数据，保持响应式
+      Object.assign(configData.value, JSON.parse(JSON.stringify(originalConfigData)));
     }
     emit('close', false);
   }
