@@ -1,0 +1,13 @@
+{
+  "name": "handheld-terminal-media-server",
+  "version": "1.0.0",
+  "description": "流媒体服务器 for 手持终端项目",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "check-ffmpeg": "ffmpeg -version || echo '请先安装 FFmpeg'"
+  },
+  "dependencies": {
+    "node-media-server": "^2.6.2"
+  }
+} 

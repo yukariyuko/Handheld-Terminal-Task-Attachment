@@ -1,5 +1,5 @@
 // vite.config.js
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { viteMockServe } from 'vite-plugin-mock';
 import { fileURLToPath, URL } from 'url';
@@ -19,6 +19,9 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',
+    port: 4173,
+    cors: true,
     proxy: {
       '/api': {
         target: 'http://192.168.2.57', 
@@ -35,7 +38,12 @@ export default defineConfig({
         target: 'http://192.168.2.57',
         changeOrigin: true,
       }
+
     }
+  },
+  assetsInclude: ['**/*.wasm'],  // 添加对wasm文件的支持
+  optimizeDeps: {
+    exclude: ['@easydarwin/easyplayer'] // 排除EasyPlayer依赖以避免预构建问题
   },
   test: {
     globals: true,

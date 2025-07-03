@@ -53,12 +53,13 @@ export const useConfigStore = defineStore('config', () => {
         try {
             console.log('正在从服务器获取配置...');
             const response = await axios.get(`${API_BASE_URL}/agv/config`);
-            if (response && response.code === 200) {
-                configData.value = response.data;
+            console.log(response);
+            if (response && response.data.code === 200) {
+                configData.value = response.data.data;
                 console.log('配置加载成功:', configData.value);
             } else {
                 console.error('Pinia store: 获取配置失败', response);
-                throw new Error(response?.msg || '获取配置失败');
+                throw new Error(response?.data.msg || '获取配置失败');
             }
         } catch (error) {
             console.error('Pinia store: 网络错误', error);

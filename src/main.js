@@ -12,7 +12,6 @@ import '../mock/initMock.js'
 
 const app = createApp(App)
 
-
 app.use(ElementPlus)
 app.use(router)
 app.use(createPinia())
