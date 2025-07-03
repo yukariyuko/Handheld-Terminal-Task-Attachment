@@ -12,6 +12,7 @@
     "test:run": "vitest run"
   },
   "devDependencies": {
+    "@pinia/testing": "^1.0.2",
     "@testing-library/vue": "^8.1.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vitest/coverage-v8": "^3.2.4",
