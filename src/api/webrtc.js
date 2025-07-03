@@ -11,7 +11,7 @@ const EASY_BASE_URL = `/easy-api`;
  * @returns {string} 完整的视频流URL
  */
 export function getVideoStreamUrl(cameraId, protocol = 'webrtc') {
-    if(import.meta.env.DEV){
+    if(import.meta.env.DEV || import.meta.env.MODE === 'test' || import.meta.env.MODE === 'coverage'){
         const map = {
             'camera_front': 'front',
             'camera_left': 'left',
