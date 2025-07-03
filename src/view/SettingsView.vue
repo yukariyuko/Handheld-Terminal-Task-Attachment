@@ -103,7 +103,7 @@ async function onSubmit() {
     if (response.data && response.data.code === 200) {
       alert('设置已保存成功！');
       // 更新备份数据，以便下次"取消"操作是基于最新的已保存状态
-      originalConfigData = JSON.parse(JSON.stringify(configData.value));
+      originalConfigData.value = JSON.parse(JSON.stringify(configData.value));
 
       emit('close', true); 
       configStore.setNeedRefresh(true); // 设置需要刷新状态
