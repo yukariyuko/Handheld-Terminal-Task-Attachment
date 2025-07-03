@@ -40,12 +40,6 @@ export default defineConfig({
           changeOrigin: true,
           // 这里也一样，前端暗号和后端路径一致，无需 rewrite
         },
-
-        '/live': {
-          target: 'http://192.168.2.57',  // 流媒体服务器地址
-          changeOrigin: true,
-          ws: true  // 启用WebSocket代理
-        }
     }
   },
   assetsInclude: ['**/*.wasm'],  // 添加对wasm文件的支持
