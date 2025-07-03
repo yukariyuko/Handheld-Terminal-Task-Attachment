@@ -17,20 +17,23 @@
           <!-- 视频监控区域 -->
           <div class="video-area">
             <div class="video-container">
-              <video
-                v-if="currentVideoStream"
-                ref="videoPlayer"
-                :src="currentVideoStream"
-                class="video-stream"
-                autoplay
-                muted
-                controls
-              />
-              <div v-else class="video-placeholder">
+              <!-- EasyPlayer 播放器容器 - 使用官方推荐的原生JS方式 -->
+              <div 
+                ref="playerContainer"
+                v-if="!isUnmounting"
+                id="easyPlayerContainer"
+                style="width: 100%; height: 100%; background: #000;"
+              ></div>
+              
+              <!-- 连接状态显示 -->
+              <div v-if="!videoConnected && !isUnmounting" class="video-placeholder">
                 <div class="placeholder-content">
-                  实时视频流显示区域
-                  <br />
-                  <small>{{ currentCameraName }} - {{ currentCameraView }}</small>
+                  <div v-if="videoConnecting">正在连接视频流...</div>
+                  <div v-else>
+                    实时视频流显示区域
+                    <br />
+                    <small>摄像头视角</small>
+                  </div>
                 </div>
               </div>
               
@@ -202,6 +205,16 @@
                 <span class="info-value">{{ taskInfo.taskCode }}</span>
               </div>
               <div class="info-item">
+                <span class="info-label">📹 视频连接状态</span>
+                <span class="info-value" :class="{
+                  'status-connected': videoConnected,
+                  'status-connecting': videoConnecting,
+                  'status-disconnected': !videoConnected && !videoConnecting
+                }">
+                  {{ connectionStatus }}
+                </span>
+              </div>
+              <div class="info-item">
                 <span class="info-label">⏰ 车辆系统时间</span>
                 <span class="info-value">{{ systemTime }}</span>
               </div>
@@ -367,7 +380,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowLeft, Refresh, Check, Close } from '@element-plus/icons-vue';
@@ -380,8 +393,13 @@ import { getEasyDevices } from '../api/camera.js';
 import { getVideoStreamUrl } from '../api/webrtc.js';
 import { checkFs, checkDb, checkAgv, checkCam } from '../api/system.js';
 
+// EasyPlayer 通过全局script标签引入，不需要import
+
 const route = useRoute();
 const router = useRouter();
+
+// 注册 EasyPlayer 组件
+// 全局注册的组件可以直接在模板中使用
 
 // 响应式数据
 const taskInfo = ref({
@@ -392,19 +410,27 @@ const taskInfo = ref({
   taskStatus: ''
 });
 
+// 添加组件卸载标记
+const isUnmounting = ref(false);
+
 const realTimeFlaws = ref([]);
 const selectedFlaw = ref(null);
 const flawModalVisible = ref(false);
 const saving = ref(false);
 
 // 视频相关
-const videoPlayer = ref(null);
-const currentVideoStream = ref('');
+const playerContainer = ref(null); // 播放器容器DOM引用
+let easyPlayerInstance = null; // EasyPlayer实例
 const selectedCamera = ref(0);
 const cameraList = ref(['摄像头1', '摄像头2', '摄像头3', '摄像头4']);
 const cameraDevices = ref([]); // 存储实际的摄像头设备信息
 const audioVolume = ref(50);
 const audioMuted = ref(false);
+
+// EasyPlayer 相关
+const currentVideoUrl = ref('');
+const videoConnected = ref(false);
+const videoConnecting = ref(false);
 
 // 控制相关
 const consoleEnabled = ref(true);
@@ -436,26 +462,77 @@ let distanceUpdateTimer = null;
 let agvStatusTimer = null;
 let systemCheckTimer = null;
 
-// 计算属性
+// 计算属性 - 添加安全检查避免错误传播
 const progressPercentage = computed(() => {
-  return Math.min((currentDistance.value / taskTotalDistance.value) * 100, 100);
+  try {
+    if (isUnmounting.value) return 0;
+    const distance = currentDistance.value || 0;
+    const total = taskTotalDistance.value || 1;
+    return Math.min((distance / total) * 100, 100);
+  } catch (error) {
+    console.error('Progress calculation error:', error);
+    return 0;
+  }
 });
 
 const confirmedFlawsCount = computed(() => {
-  return realTimeFlaws.value.filter(flaw => flaw.confirmed === true).length;
+  try {
+    if (isUnmounting.value) return 0;
+    return realTimeFlaws.value?.filter(flaw => flaw.confirmed === true)?.length || 0;
+  } catch (error) {
+    console.error('Confirmed flaws count error:', error);
+    return 0;
+  }
 });
 
 const unconfirmedFlawsCount = computed(() => {
-  return realTimeFlaws.value.filter(flaw => flaw.confirmed !== true).length;
+  try {
+    if (isUnmounting.value) return 0;
+    return realTimeFlaws.value?.filter(flaw => flaw.confirmed !== true)?.length || 0;
+  } catch (error) {
+    console.error('Unconfirmed flaws count error:', error);
+    return 0;
+  }
 });
 
 const currentCameraName = computed(() => {
-  return cameraList.value[selectedCamera.value] || '摄像头1';
+  try {
+    if (isUnmounting.value) return '摄像头1';
+    const cameras = cameraList.value || [];
+    const index = selectedCamera.value || 0;
+    return cameras[index] || '摄像头1';
+  } catch (error) {
+    console.error('Current camera name error:', error);
+    return '摄像头1';
+  }
 });
 
 const currentCameraView = computed(() => {
+  try {
+    if (isUnmounting.value) return '前方视角';
   const views = ['前方视角', '左侧视角', '右侧视角', '后方视角'];
-  return views[selectedCamera.value] || '前方视角';
+    const index = selectedCamera.value || 0;
+    return views[index] || '前方视角';
+  } catch (error) {
+    console.error('Current camera view error:', error);
+    return '前方视角';
+  }
+});
+
+const connectionStatus = computed(() => {
+  try {
+    if (isUnmounting.value) return '未连接';
+  if (videoConnecting.value) {
+    return '连接中...';
+  } else if (videoConnected.value) {
+    return '视频已连接';
+  } else {
+      return '未连接';
+    }
+  } catch (error) {
+    console.error('Connection status error:', error);
+    return '未连接';
+  }
 });
 
 // 方法
@@ -483,44 +560,403 @@ const loadTaskInfo = async () => {
 };
 
 const loadCameraList = async () => {
+  console.log('=== 开始加载摄像头列表 ===');
+  
   try {
+    console.log('正在调用 getEasyDevices() API...');
     const response = await getEasyDevices();
-    if (response && response.data && Array.isArray(response.data)) {
-      cameraDevices.value = response.data;
-      cameraList.value = response.data.map((device, index) => 
-        device.name || `摄像头${index + 1}`
-      );
+    console.log('API 响应成功:', response?.msg || 'success');
+    
+    // 检查响应数据格式：response.data.items
+    const cameraItems = response?.data?.items;
+    
+    if (cameraItems && Array.isArray(cameraItems)) {
+      console.log('✓ 成功加载摄像头设备列表，设备数量:', cameraItems.length);
+      
+      cameraDevices.value = cameraItems;
+      cameraList.value = cameraItems.map((device, index) => {
+        return device.name || `摄像头${index + 1}`;
+      });
+      
+      console.log('摄像头列表:', cameraList.value);
+    } else {
+      console.warn('⚠️ 响应数据格式异常，使用默认摄像头配置');
+      console.log('默认摄像头列表:', cameraList.value);
     }
+    
+    console.log('=== 摄像头列表加载完成 ===');
+    
   } catch (error) {
-    console.error('Load camera list error:', error);
-    ElMessage.warning('加载摄像头列表失败，使用默认配置');
+    console.error('加载摄像头列表失败:', error?.message || error);
+    
+    // 提取错误信息
+    let errorMessage = '未知错误';
+    if (typeof error === 'string') {
+      errorMessage = error === 'Error' ? '摄像头服务连接失败' : error;
+    } else if (error && error.message) {
+      errorMessage = error.message;
+    }
+    
+    ElMessage.warning(`加载摄像头列表失败: ${errorMessage}，使用默认配置`);
+    console.log('使用默认摄像头配置:', cameraList.value.length, '个设备');
   }
 };
 
-const refreshVideo = () => {
-  ElMessage.success('视频流已刷新');
-  // 重新加载视频流
-  switchCamera(selectedCamera.value);
+const refreshVideo = async () => {
+  if (videoConnectionLock || isUnmounting.value) return;
+  
+  try {
+  ElMessage.info('正在刷新视频流');
+    
+    // 重新初始化播放器实例
+    await initEasyPlayer();
+    
+    // 等待播放器初始化完成
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 重新连接当前摄像头
+    await switchCamera(selectedCamera.value);
+  } catch (error) {
+    console.error('Refresh video error:', error);
+    if (!isUnmounting.value) {
+      ElMessage.error('刷新视频失败');
+    }
+  }
 };
 
-const switchCamera = (cameraIndex) => {
+// 检查EasyPlayer是否已加载
+const checkEasyPlayerLoaded = () => {
+  // 记录所有可用的EasyPlayer相关全局变量
+  const availableGlobals = [];
+  if (typeof window.EasyPlayerPro !== 'undefined') availableGlobals.push('EasyPlayerPro');
+  if (typeof window.EasyPlayer !== 'undefined') availableGlobals.push('EasyPlayer');
+  if (typeof window.EasyDarwinPlayer !== 'undefined') availableGlobals.push('EasyDarwinPlayer');
+  if (typeof window.EasyWasmPlayer !== 'undefined') availableGlobals.push('EasyWasmPlayer');
+  
+  console.log('检查到的EasyPlayer全局变量:', availableGlobals);
+  console.log('完整的window对象中以Easy开头的属性:', 
+    Object.keys(window).filter(key => key.startsWith('Easy')));
+  
+  // 检查可能的全局变量名
+  return typeof window.EasyPlayerPro !== 'undefined' || 
+         typeof window.EasyPlayer !== 'undefined' || 
+         typeof window.EasyDarwinPlayer !== 'undefined' ||
+         typeof window.EasyWasmPlayer !== 'undefined';
+};
+
+// 动态加载EasyPlayer脚本
+const loadEasyPlayerScript = () => {
+  return new Promise((resolve, reject) => {
+    // 检查是否已经有script标签
+    const existingScript = document.querySelector('script[src*="EasyPlayer"]');
+    
+    if (existingScript) {
+      console.log('发现已存在的EasyPlayer脚本标签');
+      resolve(true);
+      return;
+    }
+    
+    console.log('动态加载EasyPlayer脚本...');
+    const script = document.createElement('script');
+    script.src = '/EasyPlayer-lib.min.js';
+    script.onload = () => {
+      console.log('EasyPlayer脚本动态加载成功');
+      resolve(true);
+    };
+    script.onerror = (error) => {
+      console.error('EasyPlayer脚本动态加载失败:', error);
+      reject(new Error('动态加载EasyPlayer失败'));
+    };
+    document.head.appendChild(script);
+  });
+};
+
+// 等待EasyPlayer加载
+const waitForEasyPlayer = async (maxWait = 15000) => {
+  const startTime = Date.now();
+  
+  // 首先检查是否已经加载
+  if (checkEasyPlayerLoaded()) {
+    return true;
+  }
+  
+  // 如果没有加载，尝试动态加载
+  try {
+    await loadEasyPlayerScript();
+    // 等待一点时间让脚本执行
+    await new Promise(r => setTimeout(r, 500));
+  } catch (error) {
+    console.error('动态加载失败:', error);
+  }
+  
+  // 继续检查是否加载成功
+  return new Promise((resolve, reject) => {
+    const checkInterval = setInterval(() => {
+      if (checkEasyPlayerLoaded()) {
+        clearInterval(checkInterval);
+        resolve(true);
+      } else if (Date.now() - startTime > maxWait) {
+        clearInterval(checkInterval);
+        reject(new Error('EasyPlayer加载超时，请检查网络连接或文件是否存在'));
+      }
+    }, 100);
+  });
+};
+
+// EasyPlayer 官方API初始化函数
+const initEasyPlayer = async () => {
+  if (isUnmounting.value || !playerContainer.value) return;
+  
+  try {
+    // 销毁现有播放器实例
+    destroyEasyPlayer();
+    
+    // 等待EasyPlayer库加载完成
+    console.log('等待EasyPlayer库加载...');
+    await waitForEasyPlayer();
+    
+    // 确定正确的全局变量名
+    let EasyPlayerClass = null;
+    if (typeof window.EasyPlayerPro !== 'undefined') {
+      EasyPlayerClass = window.EasyPlayerPro;
+      console.log('使用 EasyPlayerPro');
+    } else if (typeof window.EasyPlayer !== 'undefined') {
+      EasyPlayerClass = window.EasyPlayer;
+      console.log('使用 EasyPlayer');
+    } else if (typeof window.EasyDarwinPlayer !== 'undefined') {
+      EasyPlayerClass = window.EasyDarwinPlayer;
+      console.log('使用 EasyDarwinPlayer');
+    } else if (typeof window.EasyWasmPlayer !== 'undefined') {
+      EasyPlayerClass = window.EasyWasmPlayer;
+      console.log('使用 EasyWasmPlayer');
+    } else {
+      // 输出详细的调试信息
+      console.error('找不到EasyPlayer类！');
+      console.error('window.EasyPlayerPro:', typeof window.EasyPlayerPro);
+      console.error('window.EasyPlayer:', typeof window.EasyPlayer);
+      console.error('所有window上的Easy属性:', Object.keys(window).filter(k => k.includes('Easy')));
+      throw new Error('找不到EasyPlayer类，请检查库是否正确加载');
+    }
+    
+    // 创建播放器配置
+    const config = {
+      isLive: true,           // 直播模式
+      hasAudio: true,         // 启用音频
+      isMute: audioMuted.value, // 初始静音状态
+      stretch: true,          // 视频拉伸
+      bufferTime: 1,          // 缓冲时间（秒）
+      loadTimeOut: 10,        // 加载超时（秒）
+      loadTimeReplay: 3,      // 重连次数
+      MSE: true,             // 启用MSE解码
+      WASM: true,            // 启用WASM解码
+      WASMSIMD: true,        // 启用WASM SIMD
+      debug: true,           // 启用调试日志
+      decoderPath: '/',      // 解码器路径
+      isFlv: true,           // 启用FLV解码
+      protocol: 'flv',       // 使用FLV协议
+      useWasm: true,         // 使用WASM
+      useMSE: true,          // 使用MSE
+      useWCS: false,         // 不使用WCS
+      useSIMD: true,         // 使用SIMD
+      demuxType: 'flv',      // FLV解封装
+      videoBuffer: 1000,     // 视频缓冲区大小
+      networkDelay: 3000,    // 网络延迟容忍度
+      isHls: false,          // 不使用HLS
+      isFmp4: false,         // 不使用FMP4
+      isWebrtc: false        // 不使用WebRTC
+    };
+    
+    // 创建EasyPlayer实例
+    easyPlayerInstance = new EasyPlayerClass(playerContainer.value, config);
+    
+    // 绑定事件监听器
+    setupPlayerEvents();
+    
+    console.log('EasyPlayer 实例创建成功');
+    return easyPlayerInstance;
+    
+  } catch (error) {
+    console.error('EasyPlayer 初始化失败:', error);
+    if (!isUnmounting.value) {
+      ElMessage.error('视频播放器初始化失败');
+    }
+  }
+};
+
+// 设置播放器事件监听
+const setupPlayerEvents = () => {
+  if (!easyPlayerInstance) return;
+  
+  try {
+    // 播放事件
+    easyPlayerInstance.on('play', () => {
+      if (isUnmounting.value) return;
+  console.log('EasyPlayer 开始播放');
+  videoConnected.value = true;
+  videoConnecting.value = false;
+    });
+
+    // 暂停事件
+    easyPlayerInstance.on('pause', () => {
+      if (isUnmounting.value) return;
+  console.log('EasyPlayer 暂停播放');
+    });
+
+    // 错误事件
+    easyPlayerInstance.on('error', (error) => {
+      if (isUnmounting.value) return;
+  console.error('EasyPlayer 播放错误:', error);
+  videoConnected.value = false;
+  videoConnecting.value = false;
+      ElMessage.error('视频播放失败');
+    });
+
+    // 直播结束事件
+    easyPlayerInstance.on('liveEnd', () => {
+      if (isUnmounting.value) return;
+      console.log('EasyPlayer 直播结束');
+  videoConnected.value = false;
+  ElMessage.warning('视频流已断开');
+    });
+    
+    // 超时事件
+    easyPlayerInstance.on('timeout', () => {
+      if (isUnmounting.value) return;
+      console.log('EasyPlayer 连接超时');
+      videoConnected.value = false;
+      videoConnecting.value = false;
+      ElMessage.error('视频连接超时');
+    });
+    
+    // 视频信息事件
+    easyPlayerInstance.on('videoInfo', (info) => {
+      if (isUnmounting.value) return;
+      console.log('视频信息:', info);
+    });
+    
+  } catch (error) {
+    console.error('设置播放器事件监听失败:', error);
+  }
+};
+
+// 销毁播放器实例
+const destroyEasyPlayer = () => {
+  if (easyPlayerInstance) {
+    try {
+      console.log('正在销毁 EasyPlayer 实例...');
+      easyPlayerInstance.destroy();
+      easyPlayerInstance = null;
+      console.log('EasyPlayer 实例销毁完成');
+    } catch (error) {
+      console.error('销毁 EasyPlayer 实例失败:', error);
+      easyPlayerInstance = null;
+    }
+  }
+};
+
+// 防止视频连接的重复调用
+let videoConnectionLock = false;
+
+// 初始化视频流连接 - 使用官方EasyPlayer API
+const initVideoConnection = async (cameraId, cameraName) => {
+  if (videoConnectionLock || isUnmounting.value) return;
+  videoConnectionLock = true;
+  
+  try {
+    console.log(`开始连接摄像头: ${cameraName}`);
+    videoConnecting.value = true;
+    videoConnected.value = false;
+  
+    // 确保播放器实例存在
+    if (!easyPlayerInstance) {
+      await initEasyPlayer();
+      // 等待播放器初始化完成
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    if (!easyPlayerInstance) {
+      throw new Error('播放器初始化失败');
+    }
+    
+    // 构建视频流URL - 优先尝试WebRTC，如果失败则回退到FLV
+    let videoUrl = getVideoStreamUrl(cameraId, 'webrtc');
+    currentVideoUrl.value = videoUrl;
+    
+    console.log(`正在连接到摄像头: ${cameraName}, URL: ${videoUrl}`);
+    
+    try {
+      // 尝试使用WebRTC连接
+      await easyPlayerInstance.play(videoUrl, {
+        protocol: 'webrtc',
+        isWebrtc: true,
+        isWebrtcForZLM: true
+      });
+    } catch (webrtcError) {
+      console.warn('WebRTC连接失败，尝试使用FLV:', webrtcError);
+      
+      // 如果WebRTC失败，尝试FLV
+      videoUrl = getVideoStreamUrl(cameraId, 'flv');
+      currentVideoUrl.value = videoUrl;
+      
+      await easyPlayerInstance.play(videoUrl, {
+        protocol: 'flv',
+        isFlv: true,
+        useMSE: true
+      });
+    }
+    
+    if (!isUnmounting.value) {
+      ElMessage.info(`正在连接到${cameraName}`);
+    }
+    
+  } catch (error) {
+    console.error('Video connection init error:', error);
+    if (!isUnmounting.value) {
+      videoConnecting.value = false;
+      videoConnected.value = false;
+      ElMessage.error(`连接${cameraName}失败: ${error.message}`);
+    }
+  } finally {
+    setTimeout(() => {
+      videoConnectionLock = false;
+    }, 1000);
+  }
+};
+
+const switchCamera = async (cameraIndex) => {
+  if (videoConnectionLock || isUnmounting.value) return;
+  
+  try {
+    // 防止计算属性在更新过程中被读取
+    await nextTick(() => {
+      if (isUnmounting.value) return;
   selectedCamera.value = cameraIndex;
+    });
   
   let cameraId;
+    let cameraName;
+  
   if (cameraDevices.value && cameraDevices.value[cameraIndex]) {
-    // 使用实际的摄像头ID
-    cameraId = cameraDevices.value[cameraIndex].id || `camera${cameraIndex + 1}`;
+    // 使用实际的摄像头设备信息
+    const device = cameraDevices.value[cameraIndex];
+    cameraId = device.id || device.name || `camera${cameraIndex + 1}`;
+    cameraName = device.name || `摄像头${cameraIndex + 1}`;
   } else {
     // 回退到默认的摄像头ID
     cameraId = `camera${cameraIndex + 1}`;
+      cameraName = `摄像头${cameraIndex + 1}`;
   }
   
-  // 使用camera.js中的函数获取视频流地址
-  currentVideoStream.value = getVideoStreamUrl(cameraId);
-  ElMessage.info(`已切换到${currentCameraName.value}`);
+  // 使用EasyPlayer连接摄像头
+    await initVideoConnection(cameraId, cameraName);
+  
+  } catch (error) {
+    console.error('Switch camera error:', error);
+    if (!isUnmounting.value) {
+      ElMessage.error('切换摄像头失败');
+    }
+  }
 };
-
-
 
 // 新的AGV控制方法
 const controlAgvMovement = async (direction) => {
@@ -649,15 +1085,23 @@ const getFlawRowClassName = ({ row }) => {
 };
 
 const handleVolumeChange = (value) => {
-  if (videoPlayer.value) {
-    videoPlayer.value.volume = value / 100;
-  }
+  // EasyPlayer官方API暂不支持音量调整
+  // 仅更新UI状态
+    console.log('音量调整至:', value + '%');
+  audioVolume.value = value;
 };
 
 const toggleMute = () => {
   audioMuted.value = !audioMuted.value;
-  if (videoPlayer.value) {
-    videoPlayer.value.muted = audioMuted.value;
+  
+  // 使用EasyPlayer官方API控制静音
+  if (easyPlayerInstance) {
+    try {
+      easyPlayerInstance.setMute(audioMuted.value);
+      console.log('音频状态:', audioMuted.value ? '静音' : '开启');
+    } catch (error) {
+      console.error('设置音频状态失败:', error);
+    }
   }
 };
 
@@ -667,32 +1111,70 @@ const formatTooltip = (value) => {
 
 // 获取AGV实时状态
 const getAgvStatus = async () => {
+  // 检查组件是否正在卸载
+  if (isUnmounting.value) {
+    return;
+  }
+  
   try {
     const response = await heartbeat();
+    
+    // 再次检查，因为API调用可能在组件卸载后返回
+    if (isUnmounting.value) {
+      return;
+    }
+    
     if (response.code === 200 && response.data) {
       const statusData = response.data;
+      
+      // 使用 nextTick 避免在同一更新周期内的循环依赖
+      await nextTick(() => {
+        if (isUnmounting.value) return;
+        
+        // 先更新AGV状态
       agvStatus.value = {
         sysTime: statusData.sysTime || new Date().toLocaleString('zh-CN'),
         isRunning: statusData.isRunning || false,
-        currentPosition: statusData.currentPosition || currentDistance.value
+          currentPosition: statusData.currentPosition || 0
       };
       
       // 更新页面显示的数据
       systemTime.value = agvStatus.value.sysTime;
+      
       // 根据实际运行状态更新运动状态
       if (!agvStatus.value.isRunning && agvMovementState.value !== 'stopped') {
         agvMovementState.value = 'stopped';
       }
-      currentDistance.value = agvStatus.value.currentPosition;
+      });
+      
+      // 在下一个更新周期更新位置，避免循环依赖
+      await nextTick(() => {
+        if (isUnmounting.value) return;
+      
+        // 只有当从API获取到有效位置数据且与当前值不同时才更新
+        if (statusData.currentPosition !== undefined && 
+            statusData.currentPosition !== null && 
+            Math.abs(statusData.currentPosition - currentDistance.value) > 0.1) {
+        currentDistance.value = statusData.currentPosition;
+      }
+      });
     }
   } catch (error) {
+    // 如果组件正在卸载，不记录错误
+    if (!isUnmounting.value) {
     console.error('Get AGV status failed:', error);
     systemStatus.value.agv = false;
+    }
   }
 };
 
 // 检查系统状态
 const checkSystemStatus = async () => {
+  // 检查组件是否正在卸载
+  if (isUnmounting.value) {
+    return;
+  }
+  
   try {
     // 并行检查所有系统状态
     const [fsResult, dbResult, agvResult, camResult] = await Promise.allSettled([
@@ -701,6 +1183,11 @@ const checkSystemStatus = async () => {
       checkAgv(),
       checkCam()
     ]);
+
+    // 再次检查，因为API调用可能在组件卸载后返回
+    if (isUnmounting.value) {
+      return;
+    }
 
     systemStatus.value = {
       fs: fsResult.status === 'fulfilled' && fsResult.value?.code === 200,
@@ -716,23 +1203,48 @@ const checkSystemStatus = async () => {
     if (!systemStatus.value.agv) failedSystems.push('AGV连接');
     if (!systemStatus.value.cam) failedSystems.push('摄像头');
 
-    if (failedSystems.length > 0) {
+    if (failedSystems.length > 0 && !isUnmounting.value) {
       ElMessage.warning(`系统检查发现问题: ${failedSystems.join(', ')}`);
     }
   } catch (error) {
+    // 如果组件正在卸载，不记录错误
+    if (!isUnmounting.value) {
     console.error('System status check failed:', error);
+    }
   }
 };
 
 // 定时器函数
 const startHeartbeat = () => {
+  // 清理旧的定时器
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  
   heartbeatTimer = setInterval(async () => {
-    await getAgvStatus();
+    // 检查组件是否正在卸载
+    if (isUnmounting.value) {
+      clearInterval(heartbeatTimer);
+      return;
+    }
+    
+    try {
+      await getAgvStatus();
+    } catch (error) {
+      console.error('Heartbeat failed:', error);
+    }
   }, 5000);
 };
 
 const startFlawUpdate = () => {
+  // 清理旧的定时器
+  if (flawUpdateTimer) clearInterval(flawUpdateTimer);
+  
   flawUpdateTimer = setInterval(async () => {
+    // 检查组件是否正在卸载
+    if (isUnmounting.value) {
+      clearInterval(flawUpdateTimer);
+      return;
+    }
+    
     try {
       const response = await liveInfo(taskInfo.value.id);
       if (response.code === 200) {
@@ -745,10 +1257,23 @@ const startFlawUpdate = () => {
 };
 
 const startTimeUpdate = () => {
+  // 清理旧的定时器
+  if (timeUpdateTimer) clearInterval(timeUpdateTimer);
+  
   const updateTime = () => {
-    if (!agvStatus.value.sysTime) {
-      const now = new Date();
-      systemTime.value = now.toLocaleString('zh-CN');
+    // 检查组件是否正在卸载
+    if (isUnmounting.value) {
+      clearInterval(timeUpdateTimer);
+      return;
+    }
+    
+    try {
+      if (!agvStatus.value.sysTime) {
+        const now = new Date();
+        systemTime.value = now.toLocaleString('zh-CN');
+      }
+    } catch (error) {
+      console.error('Time update failed:', error);
     }
   };
   
@@ -757,66 +1282,219 @@ const startTimeUpdate = () => {
 };
 
 const startDistanceUpdate = () => {
-  distanceUpdateTimer = setInterval(() => {
-    // 如果从AGV状态获取到了位置信息，就不需要模拟了
-    if (!agvStatus.value.currentPosition && agvMovementState.value === 'forward') {
-      // 模拟AGV前进，每次更新增加0.5-2米
-      currentDistance.value += Math.random() * 1.5 + 0.5;
-      if (currentDistance.value >= taskTotalDistance.value) {
-        currentDistance.value = taskTotalDistance.value;
-        agvMovementState.value = 'stopped';
-      }
-    } else if (!agvStatus.value.currentPosition && agvMovementState.value === 'backward') {
-      // 模拟AGV后退，每次更新减少0.5-2米
-      currentDistance.value -= Math.random() * 1.5 + 0.5;
-      if (currentDistance.value <= 0) {
-        currentDistance.value = 0;
-        agvMovementState.value = 'stopped';
-      }
+  // 清理旧的定时器
+  if (distanceUpdateTimer) clearInterval(distanceUpdateTimer);
+  
+  distanceUpdateTimer = setInterval(async () => {
+    // 检查组件是否正在卸载
+    if (isUnmounting.value) {
+      clearInterval(distanceUpdateTimer);
+      return;
     }
-  }, 2000);
+    
+    try {
+      // 使用 nextTick 避免与其他更新冲突
+      await nextTick(() => {
+        if (isUnmounting.value) return;
+        
+        // 检查是否有真实的AGV位置数据
+        // 只有当 agvStatus 没有有效位置数据时才进行模拟
+        const lastUpdateTime = Date.now();
+        const hasRecentRealPosition = agvStatus.value.currentPosition > 0 && 
+                                     Math.abs(agvStatus.value.currentPosition - currentDistance.value) < 0.1;
+      
+        // 只有在没有真实位置数据且AGV在运动时才模拟
+        if (!hasRecentRealPosition) {
+          if (agvMovementState.value === 'forward') {
+        // 模拟AGV前进，每次更新增加0.5-2米
+        const increment = Math.random() * 1.5 + 0.5;
+        const newDistance = currentDistance.value + increment;
+        
+        if (newDistance >= taskTotalDistance.value) {
+          currentDistance.value = taskTotalDistance.value;
+          agvMovementState.value = 'stopped';
+        } else {
+          currentDistance.value = newDistance;
+        }
+          } else if (agvMovementState.value === 'backward') {
+        // 模拟AGV后退，每次更新减少0.5-2米
+        const decrement = Math.random() * 1.5 + 0.5;
+        const newDistance = currentDistance.value - decrement;
+        
+        if (newDistance <= 0) {
+          currentDistance.value = 0;
+          agvMovementState.value = 'stopped';
+        } else {
+          currentDistance.value = newDistance;
+        }
+      }
+        }
+      });
+    } catch (error) {
+      if (!isUnmounting.value) {
+      console.error('Distance update failed:', error);
+    }
+    }
+  }, 3000); // 增加间隔时间，减少更新频率
 };
 
 const startSystemCheck = () => {
+  // 清理旧的定时器
+  if (systemCheckTimer) clearInterval(systemCheckTimer);
+  
   systemCheckTimer = setInterval(async () => {
-    await checkSystemStatus();
+    // 检查组件是否正在卸载
+    if (isUnmounting.value) {
+      clearInterval(systemCheckTimer);
+      return;
+    }
+    
+    try {
+      await checkSystemStatus();
+    } catch (error) {
+      console.error('System check failed:', error);
+    }
   }, 30000); // 每30秒检查一次系统状态
 };
 
 // 生命周期
 onMounted(async () => {
-  await loadTaskInfo();
-  await loadCameraList();
-  
-  // 初始系统状态检查
-  await checkSystemStatus();
-  
-  // 启动任务
+  // 添加全局错误边界，防止初始化错误导致栈溢出
   try {
-    await startTask(taskInfo.value.id);
+    // 检查组件是否已经在卸载过程中
+    if (isUnmounting.value) return;
+    
+    // 使用 nextTick 确保DOM完全渲染后再开始初始化
+    await nextTick();
+    if (isUnmounting.value) return;
+    
+    await loadTaskInfo();
+    if (isUnmounting.value) return;
+    
+    await loadCameraList();
+    if (isUnmounting.value) return;
+    
+    // 初始系统状态检查
+    await checkSystemStatus();
+    if (isUnmounting.value) return;
+    
+    // 启动任务
+    try {
+      await startTask(taskInfo.value.id);
+    } catch (error) {
+      console.error('Start task failed:', error);
+      // 不要阻塞其他初始化步骤
+    }
+    
+    if (isUnmounting.value) return;
+    
+    // 分阶段启动定时器，避免同时启动造成冲突
+    // 增加启动间隔，减少响应式更新冲突
+    startTimeUpdate();
+    
+    setTimeout(() => {
+      if (!isUnmounting.value) startHeartbeat();
+    }, 2000);
+    
+    setTimeout(() => {
+      if (!isUnmounting.value) startFlawUpdate();
+    }, 4000);
+    
+    setTimeout(() => {
+      if (!isUnmounting.value) startDistanceUpdate();
+    }, 6000);
+    
+    setTimeout(() => {
+      if (!isUnmounting.value) startSystemCheck();
+    }, 8000);
+    
+    // 初始化EasyPlayer视频播放器
+    // 延迟启动，确保DOM已渲染且避免与定时器冲突
+    setTimeout(async () => {
+      if (!isUnmounting.value && playerContainer.value) {
+        console.log('开始初始化EasyPlayer播放器...');
+        
+        try {
+          // 初始化播放器实例
+          await initEasyPlayer();
+          
+          // 延迟切换到第一个摄像头
+          setTimeout(async () => {
+            if (!isUnmounting.value) {
+              await switchCamera(0);
+            }
+          }, 1000);
   } catch (error) {
-    console.error('Start task failed:', error);
+          console.error('EasyPlayer初始化失败:', error);
+          ElMessage.error(`视频播放器初始化失败: ${error.message}`);
+        }
+      }
+    }, 5000); // 延迟5秒，确保页面稳定
+    
+  } catch (error) {
+    // 组件初始化失败的全局错误处理
+    console.error('Component initialization failed:', error);
+    
+    // 设置卸载标记，停止所有后续操作
+    isUnmounting.value = true;
+    
+    // 清理可能已经启动的定时器
+    [heartbeatTimer, flawUpdateTimer, timeUpdateTimer, distanceUpdateTimer, systemCheckTimer].forEach(timer => {
+      if (timer) clearInterval(timer);
+    });
+    
+    // 只在组件未卸载时显示错误消息
+    if (!isUnmounting.value) {
+    ElMessage.error('页面初始化失败，请刷新重试');
+    }
   }
-  
-  // 启动定时器
-  startHeartbeat();
-  startFlawUpdate();
-  startTimeUpdate();
-  startDistanceUpdate();
-  startSystemCheck();
-  
-  // 初始化视频流
-  switchCamera(0);
 });
 
-onUnmounted(() => {
-  // 清理定时器
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-  if (flawUpdateTimer) clearInterval(flawUpdateTimer);
-  if (timeUpdateTimer) clearInterval(timeUpdateTimer);
-  if (distanceUpdateTimer) clearInterval(distanceUpdateTimer);
-  if (agvStatusTimer) clearInterval(agvStatusTimer);
-  if (systemCheckTimer) clearInterval(systemCheckTimer);
+onUnmounted(async () => {
+  console.log('TaskExecuteView 组件开始卸载...');
+  
+  // 设置卸载标记，防止异步操作继续执行
+  isUnmounting.value = true;
+  
+  try {
+    // 首先清理视频URL和状态
+    currentVideoUrl.value = '';
+    videoConnected.value = false;
+    videoConnecting.value = false;
+    
+    // 销毁EasyPlayer实例
+    destroyEasyPlayer();
+    
+    // 清理所有定时器
+    console.log('正在清理定时器...');
+    const timers = [
+      heartbeatTimer,
+      flawUpdateTimer, 
+      timeUpdateTimer,
+      distanceUpdateTimer,
+      agvStatusTimer,
+      systemCheckTimer
+    ];
+    
+    timers.forEach((timer, index) => {
+      if (timer) {
+        clearInterval(timer);
+        console.log(`定时器 ${index + 1} 已清理`);
+      }
+    });
+    
+    // 重置所有定时器变量
+    heartbeatTimer = null;
+    flawUpdateTimer = null;
+    timeUpdateTimer = null;
+    distanceUpdateTimer = null;
+    agvStatusTimer = null;
+    systemCheckTimer = null;
+    
+    console.log('TaskExecuteView 组件卸载完成');
+  } catch (error) {
+    console.error('组件卸载过程中出现错误:', error);
+  }
 });
 </script>
 
@@ -869,10 +1547,10 @@ onUnmounted(() => {
   position: relative;
 }
 
-.video-stream {
+/* EasyPlayer 样式会由组件自动处理 */
+.easy-player {
   width: 100%;
   height: 100%;
-  object-fit: cover;
 }
 
 .video-placeholder {
@@ -883,10 +1561,19 @@ onUnmounted(() => {
   justify-content: center;
   color: white;
   font-size: 18px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 10;
 }
 
 .placeholder-content {
   text-align: center;
+}
+
+.placeholder-content div {
+  margin-bottom: 10px;
 }
 
 .audio-controls {
@@ -1181,5 +1868,27 @@ onUnmounted(() => {
 .status-stopped {
   color: #909399;
   font-weight: bold;
+}
+
+.status-connected {
+  color: #67c23a;
+  font-weight: bold;
+}
+
+.status-connecting {
+  color: #e6a23c;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+}
+
+.status-disconnected {
+  color: #f56c6c;
+  font-weight: bold;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 </style> 
